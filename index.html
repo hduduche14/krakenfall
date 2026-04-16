@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Kraken Fall Multi</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Nunito:wght@700&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root { 
+            --tile-size: 90px; 
+        }
+
+        body { 
+            background-color: #dcb37b; 
+            background-image: radial-gradient(circle, #e6c280 20%, #c49a52 80%); 
+            font-family: 'Nunito', sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            margin-top: 10px; 
+            overflow-y: scroll; 
+            overflow-x: hidden; 
+            color: #333; 
+        }
+
+        h1, h2, .titre-inv, #affichage-pseudo, .titre-lobby { 
+            font-family: 'Pirata One', cursive; 
+            color: #5c1800; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+            text-shadow: 2px 2px 0px rgba(255,255,255,0.4); 
+        }
+
+        h1 { margin-bottom: 5px; font-size: 60px; }
+
+        #ecran-accueil, #ecran-lobby, .inventaire, .panneau-joueurs, .modal-contenu, #panneau-choix { 
+            background: #fdf5e6; 
+            border: 6px solid #4a2e15; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6); 
+        }
+
+        #ecran-accueil { padding: 40px; text-align: center; }
+        
+        #ecran-lobby { padding: 30px; text-align: center; display: none; width: 350px; }
+        .titre-lobby { font-size: 40px; margin-top: 0; margin-bottom: 10px; border-bottom: 3px solid #4a2e15; }
+        
+        #liste-joueurs { list-style-type: none; padding: 0; font-size: 20px; font-weight: bold; color: #8b0000; text-align: left; }
+        #liste-joueurs li { margin: 10px 0; padding: 5px; background: rgba(0,0,0,0.05); border-radius: 5px; border-left: 4px solid #4a2e15; display:flex; justify-content: space-between;}
+
+        #panneau-choix { display: none; padding: 20px; text-align: center; margin-bottom: 15px; width: 450px;}
+
+        #zone-jeu { display: none; opacity: 0; flex-direction: row; gap: 20px; align-items: flex-start; transition: opacity 0.6s ease; }
+        .zone-carte { display: flex; flex-direction: column; align-items: center; width: 490px; flex-shrink: 0; }
+
+        .map { 
+            display: grid; 
+            grid-template-columns: repeat(5, var(--tile-size)); 
+            gap: 5px; 
+            background-color: #2c1e16; 
+            padding: 12px; 
+            border: 8px solid #4a2e15; 
+            border-radius: 10px; 
+            width: max-content; 
+            user-select: none; 
+            box-shadow: inset 0 0 20px black, 0 15px 30px rgba(0,0,0,0.5); 
+            position: relative; 
+        }
+
+        .case { 
+            width: var(--tile-size); 
+            height: var(--tile-size); 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: flex-end; 
+            align-items: center; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            position: relative; 
+            box-shadow: 0 4px 0px rgba(0,0,0,0.4); 
+            transition: transform 0.1s, box-shadow 0.1s; 
+            overflow: hidden; 
+        }
+
+        .case:hover { transform: translateY(-4px) scale(1.02); z-index: 5; box-shadow: 0 8px 10px rgba(0,0,0,0.5); }
+        .case:active { transform: translateY(0px) scale(0.98); box-shadow: 0 2px 0px rgba(0,0,0,0.4); }
+
+        .eau { background: radial-gradient(circle, #3498db, #1f618d); border: 2px solid #1a5276; font-size: 30px; }
+        .ile { background: radial-gradient(circle, #2ecc71, #1e8449); border: 2px solid #145a32; }
+        .volcan { background: radial-gradient(circle, #555, #222); border: 2px solid #c0392b; box-shadow: inset 0 0 20px #e74c3c; font-size: 40px; }
+
+        .icone-ile { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+        .icone-ile-texte { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); font-size: 45px; z-index: 1; filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.6)); }
+        .nom-ile { position: relative; z-index: 2; width: 100%; background: rgba(0, 0, 0, 0.6); font-size: 11px; font-weight: bold; color: white; text-align: center; line-height: 1.4; padding: 2px 0; letter-spacing: 0.5px; }
+
+        @keyframes pulsePlacement { 0% { box-shadow: inset 0 0 10px #2ecc71, 0 0 10px #2ecc71; border: 2px solid #2ecc71; } 50% { box-shadow: inset 0 0 30px #2ecc71, 0 0 25px #2ecc71; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #2ecc71, 0 0 10px #2ecc71; border: 2px solid #2ecc71; } }
+        .case-placement { animation: pulsePlacement 1.5s infinite; z-index: 6; }
+
+        @keyframes pulseHighlight { 0% { box-shadow: inset 0 0 10px #f1c40f, 0 0 10px #f1c40f; border: 2px solid #f1c40f; } 50% { box-shadow: inset 0 0 30px #f1c40f, 0 0 25px #f1c40f; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #f1c40f, 0 0 10px #f1c40f; border: 2px solid #f1c40f; } }
+        .case-jouable { animation: pulseHighlight 1.5s infinite; z-index: 6; }
+
+        @keyframes pulseTornade { 0% { box-shadow: inset 0 0 10px #9b59b6, 0 0 10px #9b59b6; border: 2px solid #9b59b6; } 50% { box-shadow: inset 0 0 30px #9b59b6, 0 0 25px #9b59b6; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #9b59b6, 0 0 10px #9b59b6; border: 2px solid #9b59b6; } }
+        .case-jouable-tornade { animation: pulseTornade 1.5s infinite; z-index: 6; }
+
+        @keyframes flotter { 0% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-5px) rotate(2deg); } 100% { transform: translateY(0px) rotate(0deg); } }
+        .flottant { animation: flotter 2.5s infinite ease-in-out; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; }
+
+        .bateau-joueur, #navire-boucanier { 
+            position: absolute; 
+            width: var(--tile-size); 
+            height: var(--tile-size); 
+            cursor: pointer; 
+            transition: top 0.4s ease, left 0.4s ease; 
+        }
+        
+        .img-bateau { width: 80%; height: 80%; object-fit: contain; }
+        
+        .pseudo-bateau { 
+            position: absolute; 
+            bottom: -5px; 
+            width: 100%; 
+            text-align: center; 
+            font-weight: 900; 
+            text-shadow: 1px 1px 2px black, 0 0 5px black; 
+            font-size: 16px; 
+            z-index: 15; 
+            pointer-events: none;
+        }
+
+        .inventaire, .panneau-joueurs { padding: 15px; width: 280px; font-size: 15px; box-sizing: border-box; flex-shrink: 0; }
+        .joueur-carte { border: 2px dashed #cba876; padding: 8px; margin-bottom: 10px; border-radius: 6px; background: rgba(0,0,0,0.03); }
+        .joueur-nom { font-weight: 900; font-size: 18px; margin-bottom: 5px; text-shadow: 1px 1px 1px rgba(0,0,0,0.2); }
+
+        .stat-ligne { margin: 6px 0; display: flex; justify-content: space-between; border-bottom: 2px dashed #cba876; padding-bottom: 4px; }
+        .titre-inv { text-align: center; border-bottom: 3px solid #4a2e15; margin-top: 15px; margin-bottom: 10px; font-size: 26px; }
+
+        button { outline: none; -webkit-tap-highlight-color: transparent; font-family: 'Nunito', sans-serif; }
+        .btn-action { 
+            background: linear-gradient(to bottom, #8b2500, #5c1800); 
+            color: white; 
+            border: 3px solid #3a0f00; 
+            padding: 10px 14px; 
+            cursor: pointer; 
+            border-radius: 8px; 
+            font-weight: 900; 
+            font-size: 14px; 
+            margin: 3px; 
+            box-shadow: inset 0 2px 2px rgba(255,255,255,0.2), 0 4px 0px #3a0f00; 
+            text-shadow: 1px 1px 2px black; 
+            transition: all 0.1s; 
+        }
+        .btn-action:hover:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 2px 2px rgba(255,255,255,0.2), 0 2px 0px #3a0f00; }
+        .btn-action:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+        .btn-action:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
+
+        #actions-rapides { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; justify-content: center; }
+        
+        .log-messages { 
+            background-color: #e8d0a9; 
+            border: 5px solid #4a2e15; 
+            border-radius: 8px; 
+            height: 160px; 
+            width: 100%; 
+            overflow-y: auto; 
+            padding: 12px; 
+            font-size: 15px; 
+            margin-top: 15px; 
+            font-weight: bold; 
+            color: #3e2723; 
+            box-sizing: border-box; 
+            box-shadow: inset 0 0 20px rgba(139, 69, 19, 0.4), 0 6px 10px rgba(0,0,0,0.3); 
+            line-height: 1.5; 
+        }
+
+        #menu-modal, #overlay-des { 
+            position: fixed; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            display: flex; justify-content: center; align-items: center; 
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease; 
+        }
+        #menu-modal { background-color: rgba(0, 0, 0, 0.85); z-index: 100; }
+        #overlay-des { background: radial-gradient(circle, rgba(0,0,0,0.8), rgba(0,0,0,0.95)); z-index: 200; flex-direction: column; color: white; font-size: 24px; text-align: center; }
+        
+        .actif { opacity: 1 !important; pointer-events: all !important; }
+        .modal-contenu { padding: 30px; text-align: center; min-width: 350px; transform: translateY(-30px); transition: transform 0.3s; }
+        .actif .modal-contenu { transform: translateY(0); }
+        
+        .input-pari { padding: 10px; font-size: 20px; width: 80px; text-align: center; border: 4px solid #4a2e15; border-radius: 8px; margin: 10px; background: #fffdf5; font-weight: bold; color: #8b0000; }
+        #de-animation { font-size: 140px; margin-bottom: 20px; animation: secousse 0.3s infinite; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8)); }
+        @keyframes secousse { 0% { transform: rotate(-15deg) scale(1); } 50% { transform: rotate(15deg) scale(1.1); } 100% { transform: rotate(-15deg) scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div id="ecran-accueil">
+        <h1>Kraken Fall</h1>
+        <p style="font-weight: bold; font-size: 20px; margin-bottom: 20px;">Entrez votre nom de capitaine :</p>
+        <input type="text" id="pseudo-input" class="input-pari" style="width: 250px;" placeholder="Ex: Barbe Noire">
+        <br>
+        <button class="btn-action" style="font-size: 24px; padding: 15px 30px; margin-top: 10px;" onclick="rejoindreLobby()">Rejoindre l'équipage</button>
+    </div>
+
+    <div id="ecran-lobby">
+        <div class="titre-lobby">La Taverne</div>
+        <p style="font-size: 16px; font-style: italic; color: #4a2e15;">En attente d'autres navires...</p>
+        <ul id="liste-joueurs"></ul>
+        <button class="btn-action" style="font-size: 22px; padding: 15px 25px; margin-top: 20px; width: 100%;" onclick="lancerPartie()">🎲 Lancer les dés !</button>
+    </div>
+
+    <div id="zone-jeu">
+        <div class="zone-carte">
+            <h1 id="affichage-pseudo" style="text-align: center; font-size: 40px;">Capitaine</h1>
+            
+            <div id="panneau-choix">
+                <h2 style="margin-top:0;">Quel est votre plan ?</h2>
+                <button class="btn-action" style="width:90%; font-size:18px; padding:12px; margin-bottom:10px;" onclick="choisirOrdre('CHOIX_A')">🥇 Placer en 1er (Mais Jouer en dernier)</button><br>
+                <button class="btn-action" style="width:90%; font-size:18px; padding:12px; background:linear-gradient(to bottom, #2980b9, #154360);" onclick="choisirOrdre('CHOIX_B')">🚀 Jouer en 1er (Mais Placer en dernier)</button>
+            </div>
+
+            <div class="map" id="grille-carte"></div>
+            
+            <div id="actions-rapides">
+                <button id="btn-interagir" class="btn-action" onclick="clicInteragirIle()" style="display:none; background: linear-gradient(to bottom, #d35400, #a04000); border-color: #5c1800; font-size: 15px;">🏝️ Visiter l'île</button>
+                <button id="btn-tirer" class="btn-action" onclick="choisirCible('canon')" style="display:none; background: linear-gradient(to bottom, #444, #111);">💥 Canon</button>
+                <button id="btn-voile" class="btn-action" onclick="utiliserVoile()" style="display:none; background: linear-gradient(to bottom, #2980b9, #154360);">💨 Voile</button>
+                <button id="btn-repa" class="btn-action" onclick="utiliserReparation()" style="display:none; background: linear-gradient(to bottom, #27ae60, #145a32);">🛠️ Réparer</button>
+                <button id="btn-tornade" class="btn-action" onclick="activerTornade()" style="display:none; background: linear-gradient(to bottom, #8e44ad, #4a235a);">🌪️ Tornade</button>
+                <button id="btn-eruption" class="btn-action" onclick="utiliserEruption()" style="display:none; background: linear-gradient(to bottom, #e74c3c, #78281f);">🌋 Éruption</button>
+                <button id="btn-tirer-boucanier" class="btn-action" onclick="choisirCible('boucanier')" style="display:none; background: linear-gradient(to bottom, #666, #222); border-color: black;">👻 Tir Boucanier</button>
+            </div>
+            
+            <button id="btn-fin-tour" class="btn-action" style="width: 100%; padding: 15px; font-size: 24px; margin-top: 15px; font-family: 'Pirata One', cursive; display: none;" onclick="finirTour()">Finir mon tour</button>
+            <button id="btn-fin-tornade" class="btn-action" style="width: 100%; padding: 15px; font-size: 24px; margin-top: 15px; font-family: 'Pirata One', cursive; display: none; background: linear-gradient(to bottom, #8e44ad, #4a235a);" onclick="terminerTornade()">Dissiper la Tornade</button>
+
+            <div class="log-messages" id="journal">📜 <b>Journal de bord:</b><br></div>
+        </div>
+
+        <div class="panneau-joueurs" id="panneau-joueurs" style="display: none;">
+            <div class="titre-inv">Équipages</div>
+            <div id="liste-equipages"></div>
+        </div>
+
+        <div class="inventaire">
+            <div class="titre-inv">Mon Navire</div>
+            <div class="stat-ligne"><span>❤️ Points de Vie</span> <span id="valeur-vie" style="color: #c0392b; font-size: 18px;">5</span></div>
+            <div class="stat-ligne"><span>🪙 Pièces d'Or</span> <span id="valeur-pieces" style="color: #d35400; font-size: 18px;">5</span></div>
+            
+            <div class="titre-inv">Cargaison</div>
+            <div id="ma-cargaison" style="font-weight: 900; color: #5c1800; text-align: center; line-height: 1.6; font-size: 16px;">Cales vides...</div>
+            
+            <div class="titre-inv">Stock Mondial</div>
+            <div class="stat-ligne"><span>🧵 Tissu</span> <span id="stock-Tissu">5</span></div>
+            <div class="stat-ligne"><span>🍫 Cacao</span> <span id="stock-Cacao">5</span></div>
+            <div class="stat-ligne"><span>🍾 Rhum</span> <span id="stock-Rhum">5</span></div>
+            <div class="stat-ligne"><span>💣 Canons</span> <span id="stock-Canon">10</span></div>
+            <div class="stat-ligne"><span>💨 Gr. Voiles</span> <span id="stock-Voile">10</span></div>
+            <div class="stat-ligne"><span>🛠️ Réparations</span> <span id="stock-Repa">10</span></div>
+            <div class="stat-ligne"><span>🌪️ Tornades</span> <span id="stock-Tornade">5</span></div>
+            <div class="stat-ligne"><span>🌋 Éruptions</span> <span id="stock-Eruption">5</span></div>
+        </div>
+    </div>
+
+    <div id="menu-modal">
+        <div class="modal-contenu" id="contenu-dynamique"></div>
+    </div>
+    
+    <div id="overlay-des">
+        <div id="de-animation">🎲</div>
+        <div id="de-resultat" style="margin-bottom: 20px;">Lancement des dés...</div>
+    </div>
+
+    <script>
+        const socket = io();
+        
+        let monIdJoueur = null;
+        let tousLesJoueurs = {};
+        let etatDuJeu = 'LOBBY';
+        let cEstMonTour = false;
+        let joueurActuelID = null;
+
+        let layoutCarte = [];
+        let typesIles = {};
+        let positionVolcan = -1;
+        let boucanier = { position: -1, possesseur: null, prix: 0 };
+        
+        const iconesIles = { 
+            "Tissu": "tissu.png", "Cacao": "cacao.png", "Rhum": "rhum.png", 
+            "Vente": "vente.png", "Bateau": "ile_bateau.png", "Magie": "magie.png", 
+            "Boucanier": "ile_boucanier.png", "Pirate": "pirate.png", "Kraken": "kraken.png", 
+            "Kraken Fall": "kraken_fall.png", "Vie": "vie.png" 
+        };
+        const emojisSecours = { 
+            "Tissu": "🧵", "Cacao": "🍫", "Rhum": "🍾", "Vente": "💰", "Bateau": "⛵", 
+            "Magie": "🔮", "Boucanier": "🪝", "Pirate": "⚔️", "Kraken": "🦑", 
+            "Kraken Fall": "⚓", "Vie": "🏥" 
+        };
+        const couleursPions = ["#e74c3c", "#3498db", "#2ecc71", "#9b59b6", "#f1c40f"]; 
+
+        let positionJoueur = -1; 
+        let or = 5; 
+        let pv = 5; 
+        let actionFaite = false; 
+        let modeDeplacement = false; 
+        let tourBoucanierActif = false; 
+        let modeDeplacementBoucanier = false;
+
+        let etatTornade = false;
+        let tornadeCibleId = null;
+        let tornadeJoueursDeplaces = [];
+        
+        let stocks = { "Tissu": 5, "Cacao": 5, "Rhum": 5, "Canon": 10, "Voile": 10, "Repa": 10, "Tornade": 5, "Eruption": 5 };
+        let monInventaire = { "Tissu": 0, "Cacao": 0, "Rhum": 0, "Canon": 0, "Voile": 0, "Repa": 0, "Tornade": 0, "Eruption": 0, "Perle": 0 };
+        let achatsBateauEnCours = 0;
+
+        socket.on('connect', () => { 
+            monIdJoueur = socket.id; 
+        });
+
+        socket.on('erreur', (msg) => { 
+            alert(msg); 
+            document.getElementById("ecran-lobby").style.display = "none"; 
+            document.getElementById("ecran-accueil").style.display = "block"; 
+        });
+
+        socket.on('initCarte', (data) => { 
+            layoutCarte = data.layout; 
+            typesIles = data.typesIles; 
+            positionVolcan = data.positionVolcan; 
+            genererCarte(); 
+        });
+
+        socket.on('majLobby', (data) => {
+            tousLesJoueurs = data.joueurs;
+            let ul = document.getElementById("liste-joueurs");
+            ul.innerHTML = "";
+            for(let id in tousLesJoueurs) {
+                ul.innerHTML += `<li><span>🏴‍☠️ Capitaine ${tousLesJoueurs[id].pseudo}</span></li>`;
+            }
+        });
+
+        socket.on('resultatsDes', (classement) => {
+            document.getElementById("ecran-lobby").style.display = "none"; 
+            document.getElementById("zone-jeu").style.display = "flex";
+            setTimeout(() => document.getElementById("zone-jeu").style.opacity = "1", 50);
+            
+            document.getElementById("affichage-pseudo").innerText = "Tirage au sort !";
+            document.getElementById("panneau-choix").style.display = "none"; 
+            document.getElementById("grille-carte").style.display = "none"; 
+            
+            let logMsg = "🎲 <b>Résultats des dés :</b><br>";
+            classement.forEach((j, index) => {
+                logMsg += `${index + 1}. ${j.pseudo} a fait un ${j.de} !<br>`;
+            });
+            log(logMsg);
+        });
+
+        socket.on('logGlobal', (msg) => log(msg));
+        
+        socket.on('subirDegats', (d) => { 
+            pv -= d; 
+            log(`💥 VOUS AVEZ ÉTÉ TOUCHÉ ! -${d} PV`); 
+            if(pv <= 0) { 
+                alert("VOTRE NAVIRE A COULÉ !"); 
+                location.reload(); 
+            } 
+            majInterface(); 
+        });
+
+        socket.on('majJeu', (data) => {
+            tousLesJoueurs = data.joueurs;
+            etatDuJeu = data.etatJeu;
+            joueurActuelID = data.joueurActuel;
+            boucanier = data.boucanier;
+            cEstMonTour = (monIdJoueur === joueurActuelID);
+
+            if(tousLesJoueurs[monIdJoueur]) {
+                positionJoueur = tousLesJoueurs[monIdJoueur].position;
+            }
+
+            if (etatDuJeu === 'CHOIX_PREMIER') {
+                document.getElementById("grille-carte").style.display = "none";
+                if(cEstMonTour) {
+                    document.getElementById("affichage-pseudo").innerText = "Faites votre choix !";
+                    document.getElementById("panneau-choix").style.display = "block";
+                    log("👑 Vous avez eu le plus haut score ! Choisissez votre stratégie.");
+                } else {
+                    document.getElementById("panneau-choix").style.display = "none";
+                    let nomGagnant = tousLesJoueurs[joueurActuelID] ? tousLesJoueurs[joueurActuelID].pseudo : "un joueur";
+                    document.getElementById("affichage-pseudo").innerText = "Attente de " + nomGagnant;
+                    log(`⏳ En attente que ${nomGagnant} choisisse sa stratégie...`);
+                }
+            }
+            else if (etatDuJeu === 'PLACEMENT') {
+                document.getElementById("panneau-choix").style.display = "none";
+                document.getElementById("grille-carte").style.display = "grid"; 
+                
+                if (cEstMonTour) {
+                    document.getElementById("affichage-pseudo").innerText = "À vous de vous placer !";
+                    log("🗺️ CLIQUEZ SUR UNE CASE D'EAU VERTE SUR LA BORDURE DE LA CARTE !");
+                } else {
+                    let nomActuel = tousLesJoueurs[joueurActuelID] ? tousLesJoueurs[joueurActuelID].pseudo : "un joueur";
+                    document.getElementById("affichage-pseudo").innerText = "Placement de " + nomActuel;
+                    log(`⏳ ${nomActuel} est en train de s'ancrer...`);
+                }
+                majInterface();
+                afficherBateau();
+                afficherBoucanier();
+            }
+            else if (etatDuJeu === 'JEU') {
+                document.getElementById("grille-carte").style.display = "grid";
+                afficherBateau();
+                afficherBoucanier();
+
+                if (cEstMonTour && !etatTornade) {
+                    document.getElementById("affichage-pseudo").innerText = "À VOTRE TOUR !";
+                    if(!actionFaite && !tourBoucanierActif) {
+                        log("⚔️ C'est à vous de jouer !");
+                    }
+                } else if (!etatTornade) {
+                    let nomActuel = tousLesJoueurs[joueurActuelID] ? tousLesJoueurs[joueurActuelID].pseudo : "un joueur";
+                    document.getElementById("affichage-pseudo").innerText = "Tour de " + nomActuel;
+                }
+                majInterface();
+            }
+        });
+
+        function rejoindreLobby() {
+            let pseudo = document.getElementById("pseudo-input").value;
+            if(!pseudo) return alert("Hé, il te faut un nom de Capitaine !");
+            document.getElementById("ecran-accueil").style.display = "none";
+            document.getElementById("ecran-lobby").style.display = "block";
+            socket.emit('nouveauJoueur', pseudo);
+        }
+
+        function lancerPartie() { 
+            socket.emit('demarrerPartie'); 
+        }
+        
+        function choisirOrdre(choix) { 
+            socket.emit('choixOrdre', choix); 
+        }
+
+        function estSurBordure(index) { 
+            return index < 5 || index > 19 || index % 5 === 0 || index % 5 === 4; 
+        }
+
+        function genererCarte() {
+            const grille = document.getElementById("grille-carte"); 
+            grille.innerHTML = "";
+            layoutCarte.forEach((type, i) => {
+                let div = document.createElement("div"); 
+                div.className = "case " + (type === 1 ? "ile" : "eau");
+                
+                if(type === 1) { 
+                    let nom = typesIles[i]; 
+                    let imgSrc = iconesIles[nom];
+                    let secour = emojisSecours[nom];
+                    
+                    div.innerHTML = `
+                        <img src="${imgSrc}" class="icone-ile">
+                        <div class="nom-ile">${nom}</div>
+                    `; 
+                    
+                    // Sécurisation de l'image de l'île
+                    let img = div.querySelector('img');
+                    img.onerror = function() {
+                        this.outerHTML = `<div class="icone-ile-texte">${secour}</div>`;
+                    };
+                } 
+                else if (i === positionVolcan) { 
+                    div.innerHTML = `<div class="volcan" style="z-index:2; filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.6));">🌋</div>`; 
+                } 
+                div.onclick = () => verifierClic(i); 
+                grille.appendChild(div);
+            });
+            afficherBateau();
+            afficherBoucanier();
+        }
+
+        function mettreAJourSurbrillance() {
+            let cases = document.querySelectorAll(".case");
+            cases.forEach(c => c.classList.remove("case-jouable", "case-jouable-tornade", "case-placement"));
+            
+            if (etatDuJeu === 'PLACEMENT' && cEstMonTour) {
+                cases.forEach((c, i) => {
+                    if (layoutCarte[i] === 0 && i !== positionVolcan && estSurBordure(i)) {
+                        c.classList.add("case-placement");
+                    }
+                });
+            }
+            else if(etatDuJeu === 'JEU' && cEstMonTour) {
+                if(etatTornade && tornadeCibleId !== null) {
+                    let posCible = tousLesJoueurs[tornadeCibleId].position;
+                    cases.forEach((c, i) => {
+                        if(calculerDistance(posCible, i) === 1) c.classList.add("case-jouable-tornade"); 
+                    });
+                }
+                else if(modeDeplacement && !tourBoucanierActif && !etatTornade) { 
+                    cases.forEach((c, i) => { 
+                        if(calculerDistance(positionJoueur, i) === 1) c.classList.add("case-jouable"); 
+                    }); 
+                } 
+                else if (tourBoucanierActif && modeDeplacementBoucanier) { 
+                    cases.forEach((c, i) => { 
+                        if(calculerDistance(boucanier.position, i) === 1) c.classList.add("case-jouable"); 
+                    }); 
+                }
+            }
+        }
+
+        function afficherBateau() {
+            document.querySelectorAll('.bateau-joueur').forEach(b => b.remove());
+            let idsJoueurs = Object.keys(tousLesJoueurs);
+
+            for(let id in tousLesJoueurs) {
+                let joueurData = tousLesJoueurs[id];
+                if(joueurData.position === -1) continue;
+
+                let cEstMoi = (id === monIdJoueur);
+                let bateau = document.createElement("div"); 
+                bateau.className = "bateau-joueur";
+                
+                let indexJoueur = idsJoueurs.indexOf(id);
+                let couleurJoueur = couleursPions[indexJoueur % couleursPions.length];
+                let opacite = cEstMoi ? "1" : "0.85"; 
+                
+                // CRÉATION SÉCURISÉE SANS ONERROR EN LIGNE
+                bateau.innerHTML = `
+                    <div class="flottant">
+                        <img src="bateau.png" class="img-bateau" style="filter: drop-shadow(1px 1px 0px white) drop-shadow(-1px -1px 0px white) drop-shadow(0px 0px 12px ${couleurJoueur}); opacity: ${opacite};">
+                    </div>
+                    <div class="pseudo-bateau" style="color:${couleurJoueur}">${joueurData.pseudo}</div>
+                `;
+                
+                let img = bateau.querySelector('img');
+                img.onerror = function() {
+                    this.outerHTML = `<div style="font-size: 55px; filter: drop-shadow(1px 1px 0px white) drop-shadow(-1px -1px 0px white) drop-shadow(0px 0px 12px ${couleurJoueur}); opacity: ${opacite};">🏴‍☠️</div>`;
+                };
+                
+                document.getElementById("grille-carte").appendChild(bateau);
+                
+                if(cEstMoi || etatTornade) {
+                    bateau.onclick = function(e) { 
+                        e.stopPropagation(); 
+                        if (etatTornade && cEstMonTour) {
+                            if (!tornadeJoueursDeplaces.includes(id)) {
+                                tornadeCibleId = id;
+                                log(`🌪️ Sélectionnez une case vide pour déplacer ${joueurData.pseudo}.`);
+                                mettreAJourSurbrillance();
+                            } else {
+                                log(`⚠️ Vous avez déjà déplacé ce navire avec la tornade.`);
+                            }
+                        }
+                        else if(cEstMoi && etatDuJeu === 'JEU' && cEstMonTour && !tourBoucanierActif && !etatTornade) {
+                            basculerModeDeplacement(); 
+                        }
+                    };
+                }
+
+                let r = Math.floor(joueurData.position / 5);
+                let c = joueurData.position % 5;
+                let offset = indexJoueur * 4; 
+                
+                bateau.style.top = (12 + r * 95 + offset) + "px"; 
+                bateau.style.left = (12 + c * 95 + offset) + "px"; 
+                bateau.style.zIndex = cEstMoi ? 10 : 9;
+            }
+            mettreAJourSurbrillance();
+        }
+
+        function afficherBoucanier() {
+            let boucExistant = document.getElementById("navire-boucanier");
+            if(boucExistant) boucExistant.remove();
+
+            if(boucanier.position === -1) return;
+            
+            let bouc = document.createElement("div"); 
+            bouc.id = "navire-boucanier";
+            
+            // CRÉATION SÉCURISÉE SANS ONERROR EN LIGNE
+            bouc.innerHTML = `
+                <div class="flottant">
+                    <img src="bateau.png" class="img-bateau" style="filter: sepia(0.5) hue-rotate(90deg) saturate(2) drop-shadow(0px 0px 15px #27ae60);">
+                </div>
+            `;
+            
+            let img = bouc.querySelector('img');
+            img.onerror = function() {
+                this.outerHTML = `<div style="font-size: 55px; filter: sepia(0.5) hue-rotate(90deg) saturate(2) drop-shadow(0px 0px 15px #27ae60);">☠️</div>`;
+            };
+            
+            document.getElementById("grille-carte").appendChild(bouc);
+            
+            bouc.onclick = function(e) { 
+                e.stopPropagation(); 
+                if(tourBoucanierActif && cEstMonTour && boucanier.possesseur === monIdJoueur) {
+                    basculerModeDeplacementBoucanier(); 
+                }
+            };
+            
+            let rb = Math.floor(boucanier.position / 5);
+            let cb = boucanier.position % 5;
+            bouc.style.top = (12 + rb * 95 + 10) + "px"; 
+            bouc.style.left = (12 + cb * 95 + 15) + "px";
+            bouc.style.zIndex = 11;
+            
+            mettreAJourSurbrillance();
+        }
+
+        function basculerModeDeplacement() { 
+            if(!cEstMonTour) return; 
+            if(actionFaite) return log("❌ Vous avez déjà fait une action."); 
+            modeDeplacement = !modeDeplacement; 
+            if(modeDeplacement) log("🗺️ Mode Navigation activé."); 
+            mettreAJourSurbrillance(); 
+        }
+
+        function basculerModeDeplacementBoucanier() { 
+            if(!cEstMonTour) return; 
+            modeDeplacementBoucanier = !modeDeplacementBoucanier; 
+            mettreAJourSurbrillance(); 
+        }
+
+        function activerTornade() {
+            if (monInventaire["Tornade"] > 0 && !tourBoucanierActif) {
+                monInventaire["Tornade"]--;
+                etatTornade = true;
+                tornadeJoueursDeplaces = [];
+                tornadeCibleId = null;
+                modeDeplacement = false;
+                
+                document.getElementById("affichage-pseudo").innerText = "TORNADE EN COURS";
+                log("🌪️ Tornade invoquée ! Cliquez sur N'IMPORTE QUEL navire pour le déplacer (une fois chacun).");
+                
+                majInterface();
+                mettreAJourSurbrillance();
+                afficherBateau(); 
+            }
+        }
+
+        function terminerTornade() {
+            etatTornade = false;
+            tornadeCibleId = null;
+            log("🌪️ Vous avez dissipé la Tornade.");
+            document.getElementById("affichage-pseudo").innerText = "À VOTRE TOUR !";
+            majInterface();
+            mettreAJourSurbrillance();
+            afficherBateau(); 
+        }
+
+        function verifierClic(index) {
+            if (!cEstMonTour) return;
+            
+            if (etatDuJeu === 'PLACEMENT') {
+                if (layoutCarte[index] !== 0 || index === positionVolcan) {
+                    return log("❌ Choisissez une case d'EAU libre (verte).");
+                }
+                if (!estSurBordure(index)) {
+                    return log("❌ Vous devez vous placer sur une case d'eau au BORD de la carte !");
+                }
+                socket.emit('placerBateau', index); 
+                log("✅ Navire ancré !"); 
+                return;
+            }
+            
+            if (etatDuJeu !== 'JEU') return;
+            
+            // --- PENDANT LA TORNADE ---
+            if (etatTornade) {
+                if (tornadeCibleId !== null) {
+                    let posCible = tousLesJoueurs[tornadeCibleId].position;
+                    if (calculerDistance(posCible, index) === 1) {
+                        socket.emit('utiliserTornade', { cible: tornadeCibleId, pos: index });
+                        tornadeJoueursDeplaces.push(tornadeCibleId);
+                        tornadeCibleId = null;
+                        
+                        if (tornadeJoueursDeplaces.length >= Object.keys(tousLesJoueurs).length) {
+                            terminerTornade();
+                        } else {
+                            log("🌪️ Navire déplacé ! Sélectionnez un autre navire ou dissipez la tornade.");
+                            majInterface(); 
+                            mettreAJourSurbrillance();
+                        }
+                    } else {
+                        log("⚠️ Déplacement d'UNE case uniquement !");
+                    }
+                } else {
+                    log("⚓ Cliquez d'abord sur le navire que vous voulez déplacer !");
+                }
+                return; 
+            }
+
+            // --- DEPLACEMENT BOUCANIER ---
+            if(tourBoucanierActif) {
+                if(modeDeplacementBoucanier) {
+                    let distB = calculerDistance(boucanier.position, index);
+                    if(distB === 1) { 
+                        socket.emit('deplacementBoucanier', index);
+                        modeDeplacementBoucanier = false; 
+                        log("👻 Le Boucanier a navigué ! Son tour est terminé."); 
+                        setTimeout(() => finirTour(), 500); 
+                    } else {
+                        log("⚠️ Le Boucanier ne bouge que d'une seule case !");
+                    }
+                } else {
+                    log("⚓ Cliquez sur le Boucanier pour le sélectionner.");
+                }
+                return;
+            }
+
+            // --- ACTION NORMALE DU JOUEUR ---
+            let distP = calculerDistance(positionJoueur, index);
+            
+            if(modeDeplacement && !actionFaite) {
+                if(distP === 1) { 
+                    socket.emit('deplacement', index);
+                    actionFaite = true; 
+                    modeDeplacement = false; 
+                    log("⛵ Navigation effectuée."); 
+                    majInterface(); 
+                } 
+                else if (distP === 0) {
+                    log("⚠️ Vous êtes déjà sur cette case."); 
+                } else {
+                    log("❌ Trop loin !");
+                }
+            } else if (!actionFaite) {
+                if(distP <= 1 && layoutCarte[index] === 1) {
+                    ouvrirMenuIle(index);
+                } else if(layoutCarte[index] === 0) {
+                    log("🌊 C'est de l'eau.");
+                }
+            }
+        }
+
+        function clicInteragirIle() {
+            let iles = [];
+            for(let i=0; i<25; i++) {
+                if(layoutCarte[i] === 1 && calculerDistance(positionJoueur, i) <= 1) {
+                    iles.push(i);
+                }
+            }
+            
+            if(iles.length === 1) {
+                ouvrirMenuIle(iles[0]);
+            } else if(iles.length > 1) {
+                let html = `<h2>Quelle île visiter ?</h2>`;
+                iles.forEach(i => {
+                    html += `<button class="btn-action" style="width:80%; font-size:18px; margin-bottom: 8px;" onclick="ouvrirMenuIle(${i})">🏝️ ${typesIles[i]}</button><br>`;
+                });
+                html += `<br><button class="btn-action" style="background:#4a2e15;" onclick="fermerMenu()">Annuler</button>`;
+                
+                document.getElementById("contenu-dynamique").innerHTML = html;
+                document.getElementById("menu-modal").classList.add("actif");
+            }
+        }
+
+        function choisirCible(type) {
+            let cibles = [];
+            let posDepart = (type === 'boucanier') ? boucanier.position : positionJoueur;
+
+            for(let id in tousLesJoueurs) {
+                if(id === monIdJoueur) continue;
+                if(tousLesJoueurs[id].position === -1) continue; 
+
+                if(calculerDistance(posDepart, tousLesJoueurs[id].position) <= 1) {
+                    cibles.push(tousLesJoueurs[id]);
+                }
+            }
+
+            if(cibles.length === 0) return alert("Personne n'est à portée !");
+            
+            let html = `<h2>Qui ciblez-vous ?</h2>`;
+            cibles.forEach(c => {
+                html += `<button class="btn-action" style="width:80%; font-size:18px; margin-bottom:8px;" onclick="executerActionCible('${type}', '${c.id}')">Capitaine ${c.pseudo}</button><br>`;
+            });
+            html += `<br><button class="btn-action" style="background:#4a2e15;" onclick="fermerMenu()">Annuler</button>`;
+            
+            document.getElementById("contenu-dynamique").innerHTML = html;
+            document.getElementById("menu-modal").classList.add("actif");
+        }
+
+        function executerActionCible(type, cibleId) {
+            fermerMenu();
+            if(type === 'canon') {
+                socket.emit('attaque', { cible: cibleId, type: 'canon', degats: 1 });
+                monInventaire["Canon"]--;
+                actionFaite = true;
+            } else if (type === 'boucanier') {
+                socket.emit('attaque', { cible: cibleId, type: 'boucanier', degats: 1 });
+                tourBoucanierActif = false; 
+                log("👻 Le Boucanier a tiré !");
+                setTimeout(() => finirTour(), 500); 
+            }
+            majInterface();
+        }
+
+        function utiliserVoile() {
+            if (monInventaire["Voile"] > 0 && !tourBoucanierActif) {
+                monInventaire["Voile"]--;
+                actionFaite = false; 
+                modeDeplacement = true;
+                log("💨 Voile activée : Mouvement gratuit !");
+                majInterface();
+                mettreAJourSurbrillance();
+            }
+        }
+
+        function utiliserReparation() {
+            if (monInventaire["Repa"] > 0 && !tourBoucanierActif) {
+                monInventaire["Repa"]--;
+                pv++;
+                actionFaite = true;
+                log("🛠️ Réparation : +1 PV");
+                majInterface();
+            }
+        }
+
+        function utiliserEruption() {
+            if (monInventaire["Eruption"] > 0 && !tourBoucanierActif) {
+                monInventaire["Eruption"]--;
+                pv -= 2;
+                actionFaite = true;
+                log("🌋 ÉRUPTION ! -2 PV."); 
+                if (pv <= 0) { alert("Mort !"); location.reload(); }
+                majInterface();
+            }
+        }
+
+        // ==========================================
+        // GESTION DU MENU D'ILE DECOMPRESSE
+        // ==========================================
+        function ouvrirMenuIle(index) {
+            achatsBateauEnCours = 0; 
+            let type = typesIles[index]; 
+            let contenu = document.getElementById("contenu-dynamique");
+            
+            let html = `
+                <h2>
+                    <span style="font-size: 50px;">
+                        <img src="${iconesIles[type]}" style="width:50px; height:50px; object-fit:contain;">
+                    </span> 
+                    Île : ${type}
+                </h2>
+            `;
+            
+            if(["Tissu", "Cacao", "Rhum"].includes(type)) { 
+                html += `
+                    <p style="font-size:18px;">Prix : <b>1 pièce</b> | En stock : <b>${stocks[type]}</b></p>
+                    <button class="btn-action" style="font-size:18px; padding:12px 20px;" onclick="executerAchat('${type}', 1, 1)">Acheter 1</button> 
+                    <button class="btn-action" style="font-size:18px; padding:12px 20px;" onclick="executerAchat('${type}', 2, 2)">Acheter 2</button>
+                `;
+            } 
+            else if(type === "Vente") { 
+                html += `<p style="font-size:18px;">Vendez vos ressources (2 pièces l'unité).</p>`; 
+                let aDesRessources = false; 
+                
+                ["Tissu", "Cacao", "Rhum"].forEach(res => { 
+                    if(monInventaire[res] > 0) { 
+                        aDesRessources = true; 
+                        html += `
+                            <div style="margin-bottom: 15px; background: rgba(139, 69, 19, 0.1); padding: 10px; border-radius: 8px; border: 2px dashed #8b2500;">
+                                <b style="font-size:18px;">${emojisSecours[res]} ${res}</b> (En soute : ${monInventaire[res]})<br>
+                                <button class="btn-action" onclick="executerVente('${res}', 1)">Vendre 1 (+2 Or)</button>
+                        `; 
+                        
+                        if(monInventaire[res] >= 2) { 
+                            html += `<button class="btn-action" onclick="executerVente('${res}', 2)">Vendre 2 (+4 Or)</button>`; 
+                        } 
+                        html += `</div>`; 
+                    } 
+                }); 
+                
+                if(!aDesRessources) {
+                    html += `<p style="color: #8b0000; font-style: italic; font-size:20px;">Vos cales sont vides...</p>`;
+                }
+            } 
+            else if(type === "Bateau") { 
+                html += `
+                    <p style="font-size:18px;">Améliorez navire (2 Or / objet).<br>Achats restants : <b id="compteur-achats-bateau">2</b></p>
+                    <button class="btn-action" onclick="executerAchatObjet('Canon', 'Bateau')">💣 Canon</button><br>
+                    <button class="btn-action" onclick="executerAchatObjet('Voile', 'Bateau')">💨 Gr. Voile</button><br>
+                    <button class="btn-action" onclick="executerAchatObjet('Repa', 'Bateau')">🛠️ Réparation</button>
+                `;
+            } 
+            else if(type === "Magie") { 
+                html += `
+                    <p style="font-size:18px;">Magie noire (Coût: 1 PV / objet).<br>Achats restants : <b id="compteur-achats-magie">2</b></p>
+                    <button class="btn-action" style="width:80%; margin-bottom:5px;" onclick="executerAchatObjet('Tornade', 'Magie')">🌪️ Tornade</button><br>
+                    <button class="btn-action" style="width:80%;" onclick="executerAchatObjet('Eruption', 'Magie')">🌋 Éruption</button>
+                `;
+            } 
+            else if(type === "Vie") { 
+                html += `<button class="btn-action" style="font-size:20px; padding:15px 30px;" onclick="executerSoin()">Demander l'aide</button>`;
+            } 
+            else if(type === "Boucanier") { 
+                if(boucanier.possesseur === monIdJoueur) {
+                    html += `<p style="color: #27ae60; font-weight: 900; font-size: 22px;">Il est déjà à vos ordres !</p>`; 
+                } else { 
+                    html += `
+                        <p style="font-size:16px;">Prix : <b>Mise + ancien prix (${boucanier.prix})</b>.</p>
+                        Mise : <input type="number" id="mise-bouc" class="input-pari" min="1" value="1"><br>
+                        <button class="btn-action" onclick="capturerBoucanier()">Payer & Capturer</button>
+                    `; 
+                }
+            } 
+            else if(type === "Pirate") { 
+                html += `
+                    <p style="font-size:18px;"><b>Pari (20 Pièces)</b><br>Dé 4 >= pari : Mort.</p>
+                    <input type="number" id="pari-canons" class="input-pari" min="1" max="${monInventaire['Canon']}" value="1"> Canons<br>
+                    <button class="btn-action" onclick="lancerDeJeu('Pirate', 4, 'pari-canons')">🎲 Lancer Dé 4</button>
+                `;
+            } 
+            else if(type === "Kraken") { 
+                if(monInventaire["Perle"] > 0) {
+                    html += `<p style="font-size:20px; font-weight:bold; color:#8e44ad;">Vous possédez la Perle.</p>`; 
+                } else {
+                    html += `
+                        <p style="font-size:18px;"><b>Perle Kraken</b><br>Dé 6 >= pari : Mort.</p>
+                        <input type="number" id="pari-kraken" class="input-pari" min="1" max="${monInventaire['Canon']}" value="1"> Canons<br>
+                        <button class="btn-action" onclick="lancerDeJeu('Kraken', 6, 'pari-kraken')">🎲 Lancer Dé 6</button>
+                    `;
+                }
+            } 
+            else if(type === "Kraken Fall") { 
+                if(monInventaire["Perle"] > 0) {
+                    html += `<button class="btn-action" style="background: linear-gradient(to bottom, #f1c40f, #f39c12); font-size: 28px; padding: 20px; color:#5c1800;" onclick="gagnerJeu()">🏆 DÉPOSER LA PERLE !</button>`; 
+                } else {
+                    html += `<p style="color: #c0392b; font-weight: 900; font-size: 20px;">Il vous faut la Perle.</p>`; 
+                }
+            }
+            
+            html += `<br><br><button class="btn-action" style="background: #34495e; border-color:#2c3e50; font-size:16px; padding:10px 20px;" onclick="annulerMenu()">Fermer</button>`;
+            
+            contenu.innerHTML = html; 
+
+            // Securisation des images pour le menu
+            let img = contenu.querySelector('img');
+            if (img) {
+                img.onerror = function() {
+                    this.outerHTML = `<span>${emojisSecours[type]}</span>`;
+                };
+            }
+
+            document.getElementById("menu-modal").classList.add("actif");
+        }
+
+        function fermerMenu() { 
+            document.getElementById("menu-modal").classList.remove("actif"); 
+        }
+
+        function annulerMenu() { 
+            if(achatsBateauEnCours > 0) { 
+                actionFaite = true; 
+            } 
+            fermerMenu(); 
+            majInterface(); 
+        }
+        
+        function capturerBoucanier() {
+            let mise = parseInt(document.getElementById("mise-bouc").value);
+            if(isNaN(mise) || mise <= 0) return alert("Mise invalide !");
+            
+            let cout = boucanier.prix + mise;
+            if(or >= cout) {
+                or -= cout;
+                actionFaite = true;
+                socket.emit('achatBoucanier', { mise: mise, pos: positionJoueur });
+                fermerMenu();
+                majInterface();
+            } else {
+                alert("Pas assez d'or.");
+            }
+        }
+
+        function executerAchat(n, q, p) { 
+            if(or >= p && stocks[n] >= q) { 
+                or -= p; 
+                stocks[n] -= q; 
+                monInventaire[n] += q; 
+                actionFaite = true; 
+                log(`🛒 Achat ${q} ${n}.`); 
+                fermerMenu(); 
+                majInterface(); 
+            } else {
+                alert("Impossible (Or manquant ou stock vide)");
+            }
+        }
+        
+        function executerAchatObjet(n, typeBoutique) { 
+            let coutOr = (typeBoutique === 'Bateau') ? 2 : 0;
+            let coutPv = (typeBoutique === 'Magie') ? 1 : 0;
+
+            if(or >= coutOr && pv > coutPv && stocks[n] > 0) { 
+                or -= coutOr; 
+                pv -= coutPv;
+                stocks[n] -= 1; 
+                monInventaire[n] += 1; 
+                achatsBateauEnCours++; 
+                
+                log(`🛒 ${n} acheté !`); 
+                majInterface(); 
+                
+                if(achatsBateauEnCours >= 2) { 
+                    actionFaite = true; 
+                    fermerMenu(); 
+                    majInterface(); 
+                } else { 
+                    let comp = document.getElementById("compteur-achats-" + typeBoutique.toLowerCase());
+                    if(comp) comp.innerText = 2 - achatsBateauEnCours; 
+                } 
+            } else {
+                alert("Ressources insuffisantes (Or ou Vie) ou stock vide !"); 
+            }
+        }
+
+        function executerVente(n, q) { 
+            if(monInventaire[n] >= q) { 
+                let g = q * 2; 
+                or += g; 
+                monInventaire[n] -= q; 
+                stocks[n] += q; 
+                actionFaite = true; 
+                log(`💰 Vente : +${g} or.`); 
+                fermerMenu(); 
+                majInterface(); 
+            } else {
+                alert("Pas assez en soute !");
+            }
+        }
+
+        function executerSoin() { 
+            let d = (pv===1)?3 : (pv===2)?2 : (pv===3)?1 : 0; 
+            if(d > 0){ 
+                or += d; 
+                actionFaite = true; 
+                log(`🏥 Aide reçue : +${d} pièces.`); 
+                fermerMenu(); 
+                majInterface(); 
+            } else {
+                alert("Vous avez trop de vie pour réclamer l'aide !");
+            }
+        }
+
+        function lancerDeJeu(typeIle, maxDe, inputId) { 
+            let pari = parseInt(document.getElementById(inputId).value); 
+            
+            if(isNaN(pari) || pari <= 0) return alert("Pari invalide !"); 
+            if(pari > monInventaire["Canon"]) return alert("Vous n'avez pas assez de canons en soute !"); 
+            
+            fermerMenu(); 
+            
+            let overlay = document.getElementById("overlay-des"); 
+            let animation = document.getElementById("de-animation"); 
+            let resultatTexte = document.getElementById("de-resultat"); 
+            let btnFermer = document.getElementById("btn-fermer-de");
+            
+            if(!btnFermer) {
+                btnFermer = document.createElement("button");
+                btnFermer.id = "btn-fermer-de";
+                btnFermer.className = "btn-action";
+                btnFermer.style.fontSize = "28px";
+                btnFermer.style.padding = "15px 30px";
+                overlay.appendChild(btnFermer);
+            }
+
+            overlay.classList.add("actif"); 
+            animation.style.display = "block"; 
+            resultatTexte.innerHTML = `Lancement du Dé ${maxDe}...<br>Pari : ${pari} canons.`; 
+            btnFermer.style.display = "none"; 
+            
+            setTimeout(() => { 
+                let resultat = Math.floor(Math.random() * maxDe) + 1; 
+                animation.style.display = "none"; 
+                
+                let message = `<h2 style="font-size: 60px; color: #f1c40f;">${resultat} !</h2>`; 
+                if(resultat >= pari) {
+                    message += `<p style="color: #e74c3c;">Perdu !</p>`; 
+                } else {
+                    message += `<p style="color: #2ecc71;">Gagné !</p>`; 
+                }
+                
+                resultatTexte.innerHTML = message; 
+                btnFermer.style.display = "inline-block"; 
+                btnFermer.innerText = "Fermer";
+                
+                btnFermer.onclick = function() { 
+                    overlay.classList.remove("actif"); 
+                    if(typeIle === "Pirate") {
+                        resoudrePirate(resultat, pari); 
+                    } else if(typeIle === "Kraken") {
+                        resoudreKraken(resultat, pari); 
+                    }
+                }; 
+            }, 1500); 
+        }
+
+        function resoudrePirate(de, pari) { 
+            if(de >= pari) { 
+                pv = 0; 
+                majInterface(); 
+                alert(`☠️ Vous avez été tué par le Pirate !`); 
+                location.reload(); 
+            } else { 
+                or += 20; 
+                monInventaire["Canon"] -= de; 
+                stocks["Canon"] += de; 
+                actionFaite = true; 
+                log(`💰 +20 Pièces d'or.`); 
+                majInterface(); 
+            } 
+        }
+
+        function resoudreKraken(de, pari) { 
+            if(de >= pari) { 
+                pv = 0; 
+                majInterface(); 
+                alert(`☠️ Vous avez été mangé par le Kraken !`); 
+                location.reload(); 
+            } else { 
+                monInventaire["Perle"] += 1; 
+                monInventaire["Canon"] -= de; 
+                stocks["Canon"] += de; 
+                actionFaite = true; 
+                log(`🔮 Perle obtenue.`); 
+                majInterface(); 
+            } 
+        }
+
+        function gagnerJeu() { 
+            alert("👑 VICTOIRE ! Vous avez gagné la partie !"); 
+            location.reload(); 
+        }
+
+        function finirTour() {
+            if (!cEstMonTour) return log("Ce n'est pas votre tour.");
+            if (!actionFaite && !tourBoucanierActif && !etatTornade) log("⏳ Tour passé.");
+            
+            if(boucanier.possesseur === monIdJoueur && !tourBoucanierActif) { 
+                tourBoucanierActif = true; 
+                actionFaite = true; 
+                modeDeplacement = false; 
+                log("⚓ Phase du Boucanier ! Cliquez sur lui pour le déplacer, ou sur 'Tir Boucanier'."); 
+                majInterface(); 
+            } else { 
+                actionFaite = false; 
+                modeDeplacement = false; 
+                tourBoucanierActif = false; 
+                modeDeplacementBoucanier = false; 
+                etatTornade = false;
+                log("--- Fin de votre tour. ---"); 
+                socket.emit('finDeTour'); 
+                majInterface(); 
+            }
+        }
+
+        function calculerDistance(pos1, pos2) { 
+            let l1 = Math.floor(pos1/5);
+            let c1 = pos1%5;
+            let l2 = Math.floor(pos2/5);
+            let c2 = pos2%5; 
+            return Math.abs(l1-l2) + Math.abs(c1-c2); 
+        }
+        
+        function log(msg) { 
+            let j = document.getElementById("journal"); 
+            j.innerHTML += "<br>> " + msg; 
+            j.scrollTo({ top: j.scrollHeight, behavior: 'smooth' }); 
+        }
+
+        function majInterface() {
+            document.getElementById("valeur-vie").innerText = pv;
+            document.getElementById("valeur-pieces").innerText = or;
+            
+            for(let res in stocks) { 
+                document.getElementById("stock-" + res).innerText = stocks[res]; 
+            }
+            
+            let inv = ""; 
+            for(let res in monInventaire) { 
+                if(monInventaire[res] > 0) { 
+                    if(res === "Perle") {
+                        inv += `🔮 Perle ! | `; 
+                    } else {
+                        inv += `${emojisSecours[res]} ${res}:${monInventaire[res]} | `; 
+                    }
+                } 
+            }
+            document.getElementById("ma-cargaison").innerText = inv || "Cales vides...";
+            
+            let btnFin = document.getElementById("btn-fin-tour");
+            let btnTornade = document.getElementById("btn-fin-tornade");
+            
+            let estEnJeu = (etatDuJeu === 'JEU' && cEstMonTour);
+
+            btnTornade.style.display = (estEnJeu && etatTornade) ? "block" : "none";
+            btnFin.style.display = (estEnJeu && !etatTornade) ? "block" : "none";
+
+            if(tourBoucanierActif) { 
+                btnFin.innerText = "Terminer phase Boucanier"; 
+                btnFin.style.background = "linear-gradient(to bottom, #666, #222)"; 
+            } else { 
+                btnFin.innerText = "Finir mon tour"; 
+                btnFin.style.background = "linear-gradient(to bottom, #8b2500, #5c1800)"; 
+            }
+            
+            let ilesProches = false;
+            for(let i=0; i<25; i++) {
+                if(layoutCarte[i] === 1 && calculerDistance(positionJoueur, i) <= 1) {
+                    ilesProches = true; break;
+                }
+            }
+            
+            document.getElementById("btn-interagir").style.display = (ilesProches && !tourBoucanierActif && estEnJeu && !etatTornade) ? "inline-block" : "none";
+            document.getElementById("btn-interagir").disabled = actionFaite;
+
+            document.getElementById("btn-tirer").style.display = (monInventaire["Canon"] > 0 && !tourBoucanierActif && estEnJeu && !etatTornade) ? "inline-block" : "none";
+            document.getElementById("btn-tirer").disabled = actionFaite; 
+            
+            document.getElementById("btn-repa").style.display = (monInventaire["Repa"] > 0 && !tourBoucanierActif && estEnJeu && !etatTornade) ? "inline-block" : "none";
+            document.getElementById("btn-voile").style.display = (monInventaire["Voile"] > 0 && !tourBoucanierActif && estEnJeu && !etatTornade) ? "inline-block" : "none";
+            
+            document.getElementById("btn-tornade").style.display = (monInventaire["Tornade"] > 0 && !tourBoucanierActif && estEnJeu && !etatTornade) ? "inline-block" : "none";
+            
+            document.getElementById("btn-eruption").style.display = (monInventaire["Eruption"] > 0 && !tourBoucanierActif && estEnJeu && !etatTornade) ? "inline-block" : "none";
+            document.getElementById("btn-tirer-boucanier").style.display = (tourBoucanierActif && estEnJeu && !etatTornade) ? "inline-block" : "none";
+
+            let totalCargaison = (monInventaire["Tissu"] || 0) + (monInventaire["Cacao"] || 0) + (monInventaire["Rhum"] || 0) + (monInventaire["Perle"] || 0);
+            
+            if (tousLesJoueurs[monIdJoueur]) {
+                let me = tousLesJoueurs[monIdJoueur];
+                if (me.pv !== pv || me.or !== or || me.cargaison !== totalCargaison) {
+                    socket.emit('majStats', { pv: pv, or: or, cargaison: totalCargaison });
+                }
+            }
+
+            if(etatDuJeu === 'JEU') {
+                document.getElementById("panneau-joueurs").style.display = "block";
+                let listHTML = "";
+                let idsJoueurs = Object.keys(tousLesJoueurs);
+                
+                for(let id in tousLesJoueurs) {
+                    let j = tousLesJoueurs[id];
+                    let indexJoueur = idsJoueurs.indexOf(id);
+                    let couleur = couleursPions[indexJoueur % couleursPions.length];
+                    let iconeTour = (id === joueurActuelID) ? "⚔️ " : "";
+                    
+                    listHTML += `
+                        <div class="joueur-carte">
+                            <div class="joueur-nom" style="color: ${couleur};">${iconeTour}Capitaine ${j.pseudo}</div>
+                            <div style="font-weight: bold; font-size: 14px;">
+                                ❤️ ${j.pv !== undefined ? j.pv : 5} &nbsp;|&nbsp; 🪙 ${j.or !== undefined ? j.or : 5} &nbsp;|&nbsp; 📦 ${j.cargaison !== undefined ? j.cargaison : 0}
+                            </div>
+                        </div>
+                    `;
+                }
+                document.getElementById("liste-equipages").innerHTML = listHTML;
+            } else {
+                document.getElementById("panneau-joueurs").style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>

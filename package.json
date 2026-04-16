@@ -1,0 +1,13 @@
+{
+  "name": "kraken-fall",
+  "version": "1.0.0",
+  "description": "Jeu de pirate multijoueur",
+  "main": "serveur.js",
+  "scripts": {
+    "start": "node serveur.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}
