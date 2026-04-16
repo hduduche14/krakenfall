@@ -187,6 +187,7 @@
         .actif .modal-contenu { transform: translateY(0); }
         
         .input-pari { padding: 10px; font-size: 20px; width: 80px; text-align: center; border: 4px solid #4a2e15; border-radius: 8px; margin: 10px; background: #fffdf5; font-weight: bold; color: #8b0000; }
+        
         #de-animation { font-size: 140px; margin-bottom: 20px; animation: secousse 0.3s infinite; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8)); }
         @keyframes secousse { 0% { transform: rotate(-15deg) scale(1); } 50% { transform: rotate(15deg) scale(1.1); } 100% { transform: rotate(-15deg) scale(1); } }
     </style>
@@ -232,7 +233,7 @@
             
             <button id="btn-fin-tour" class="btn-action" style="width: 100%; padding: 15px; font-size: 24px; margin-top: 15px; font-family: 'Pirata One', cursive; display: none;" onclick="finirTour()">Finir mon tour</button>
             <button id="btn-fin-tornade" class="btn-action" style="width: 100%; padding: 15px; font-size: 24px; margin-top: 15px; font-family: 'Pirata One', cursive; display: none; background: linear-gradient(to bottom, #8e44ad, #4a235a);" onclick="terminerTornade()">Dissiper la Tornade</button>
-
+            
             <div class="log-messages" id="journal">📜 <b>Journal de bord:</b><br></div>
         </div>
 
@@ -302,6 +303,8 @@
         let pv = 5; 
         let actionFaite = false; 
         let modeDeplacement = false; 
+        let deplacementGratuit = false;
+        
         let tourBoucanierActif = false; 
         let modeDeplacementBoucanier = false;
 
@@ -327,7 +330,14 @@
             layoutCarte = data.layout; 
             typesIles = data.typesIles; 
             positionVolcan = data.positionVolcan; 
+            stocks = data.stocks; 
             genererCarte(); 
+            majInterface();
+        });
+
+        socket.on('majStocks', (nouveauxStocks) => {
+            stocks = nouveauxStocks;
+            majInterface();
         });
 
         socket.on('majLobby', (data) => {
@@ -365,6 +375,22 @@
                 location.reload(); 
             } 
             majInterface(); 
+        });
+
+        socket.on('mort', () => { 
+            alert("VOTRE NAVIRE A COULÉ SOUS LES TIRS ENNEMIS !"); 
+            location.reload(); 
+        });
+
+        socket.on('recoitLoot', (loot) => {
+            or += loot.or;
+            if(loot.inventaire) {
+                for(let key in loot.inventaire) {
+                    monInventaire[key] += loot.inventaire[key];
+                }
+            }
+            log("🏴‍☠️ Abordage réussi ! Vous avez pillé les restes du navire !");
+            majInterface();
         });
 
         socket.on('majJeu', (data) => {
@@ -462,7 +488,6 @@
                         <div class="nom-ile">${nom}</div>
                     `; 
                     
-                    // Sécurisation de l'image de l'île
                     let img = div.querySelector('img');
                     img.onerror = function() {
                         this.outerHTML = `<div class="icone-ile-texte">${secour}</div>`;
@@ -498,12 +523,18 @@
                 }
                 else if(modeDeplacement && !tourBoucanierActif && !etatTornade) { 
                     cases.forEach((c, i) => { 
-                        if(calculerDistance(positionJoueur, i) === 1) c.classList.add("case-jouable"); 
+                        // JOUEURS : PLUS DE COLLISION 
+                        if(calculerDistance(positionJoueur, i) === 1) {
+                            c.classList.add("case-jouable"); 
+                        }
                     }); 
                 } 
                 else if (tourBoucanierActif && modeDeplacementBoucanier) { 
                     cases.forEach((c, i) => { 
-                        if(calculerDistance(boucanier.position, i) === 1) c.classList.add("case-jouable"); 
+                        // BOUCANIER : PLUS DE COLLISION NON PLUS
+                        if(calculerDistance(boucanier.position, i) === 1) {
+                            c.classList.add("case-jouable"); 
+                        }
                     }); 
                 }
             }
@@ -525,7 +556,6 @@
                 let couleurJoueur = couleursPions[indexJoueur % couleursPions.length];
                 let opacite = cEstMoi ? "1" : "0.85"; 
                 
-                // CRÉATION SÉCURISÉE SANS ONERROR EN LIGNE
                 bateau.innerHTML = `
                     <div class="flottant">
                         <img src="bateau.png" class="img-bateau" style="filter: drop-shadow(1px 1px 0px white) drop-shadow(-1px -1px 0px white) drop-shadow(0px 0px 12px ${couleurJoueur}); opacity: ${opacite};">
@@ -546,7 +576,7 @@
                         if (etatTornade && cEstMonTour) {
                             if (!tornadeJoueursDeplaces.includes(id)) {
                                 tornadeCibleId = id;
-                                log(`🌪️ Sélectionnez une case vide pour déplacer ${joueurData.pseudo}.`);
+                                log(`🌪️ Sélectionnez une case pour déplacer ${joueurData.pseudo}.`);
                                 mettreAJourSurbrillance();
                             } else {
                                 log(`⚠️ Vous avez déjà déplacé ce navire avec la tornade.`);
@@ -578,7 +608,6 @@
             let bouc = document.createElement("div"); 
             bouc.id = "navire-boucanier";
             
-            // CRÉATION SÉCURISÉE SANS ONERROR EN LIGNE
             bouc.innerHTML = `
                 <div class="flottant">
                     <img src="bateau.png" class="img-bateau" style="filter: sepia(0.5) hue-rotate(90deg) saturate(2) drop-shadow(0px 0px 15px #27ae60);">
@@ -610,8 +639,9 @@
 
         function basculerModeDeplacement() { 
             if(!cEstMonTour) return; 
-            if(actionFaite) return log("❌ Vous avez déjà fait une action."); 
+            if(actionFaite && !deplacementGratuit) return log("❌ Vous avez déjà fait une action."); 
             modeDeplacement = !modeDeplacement; 
+            if(!modeDeplacement) deplacementGratuit = false; 
             if(modeDeplacement) log("🗺️ Mode Navigation activé."); 
             mettreAJourSurbrillance(); 
         }
@@ -625,6 +655,7 @@
         function activerTornade() {
             if (monInventaire["Tornade"] > 0 && !tourBoucanierActif) {
                 monInventaire["Tornade"]--;
+                socket.emit('syncStocks', stocks);
                 etatTornade = true;
                 tornadeJoueursDeplaces = [];
                 tornadeCibleId = null;
@@ -695,6 +726,7 @@
             if(tourBoucanierActif) {
                 if(modeDeplacementBoucanier) {
                     let distB = calculerDistance(boucanier.position, index);
+                    
                     if(distB === 1) { 
                         socket.emit('deplacementBoucanier', index);
                         modeDeplacementBoucanier = false; 
@@ -712,10 +744,16 @@
             // --- ACTION NORMALE DU JOUEUR ---
             let distP = calculerDistance(positionJoueur, index);
             
-            if(modeDeplacement && !actionFaite) {
+            if(modeDeplacement) {
                 if(distP === 1) { 
-                    socket.emit('deplacement', index);
-                    actionFaite = true; 
+                    socket.emit('deplacement', index); 
+                    
+                    if(deplacementGratuit) {
+                        deplacementGratuit = false;
+                    } else {
+                        actionFaite = true; 
+                    }
+                    
                     modeDeplacement = false; 
                     log("⛵ Navigation effectuée."); 
                     majInterface(); 
@@ -784,7 +822,7 @@
         function executerActionCible(type, cibleId) {
             fermerMenu();
             if(type === 'canon') {
-                socket.emit('attaque', { cible: cibleId, type: 'canon', degats: 1 });
+                socket.emit('attaque', { cible: cibleId, type: 'canon', degats: 2 });
                 monInventaire["Canon"]--;
                 actionFaite = true;
             } else if (type === 'boucanier') {
@@ -799,7 +837,7 @@
         function utiliserVoile() {
             if (monInventaire["Voile"] > 0 && !tourBoucanierActif) {
                 monInventaire["Voile"]--;
-                actionFaite = false; 
+                deplacementGratuit = true;
                 modeDeplacement = true;
                 log("💨 Voile activée : Mouvement gratuit !");
                 majInterface();
@@ -828,9 +866,6 @@
             }
         }
 
-        // ==========================================
-        // GESTION DU MENU D'ILE DECOMPRESSE
-        // ==========================================
         function ouvrirMenuIle(index) {
             achatsBateauEnCours = 0; 
             let type = typesIles[index]; 
@@ -935,7 +970,6 @@
             
             contenu.innerHTML = html; 
 
-            // Securisation des images pour le menu
             let img = contenu.querySelector('img');
             if (img) {
                 img.onerror = function() {
@@ -981,6 +1015,7 @@
                 monInventaire[n] += q; 
                 actionFaite = true; 
                 log(`🛒 Achat ${q} ${n}.`); 
+                socket.emit('syncStocks', stocks);
                 fermerMenu(); 
                 majInterface(); 
             } else {
@@ -1000,6 +1035,7 @@
                 achatsBateauEnCours++; 
                 
                 log(`🛒 ${n} acheté !`); 
+                socket.emit('syncStocks', stocks);
                 majInterface(); 
                 
                 if(achatsBateauEnCours >= 2) { 
@@ -1023,6 +1059,7 @@
                 stocks[n] += q; 
                 actionFaite = true; 
                 log(`💰 Vente : +${g} or.`); 
+                socket.emit('syncStocks', stocks);
                 fermerMenu(); 
                 majInterface(); 
             } else {
@@ -1108,6 +1145,7 @@
                 stocks["Canon"] += de; 
                 actionFaite = true; 
                 log(`💰 +20 Pièces d'or.`); 
+                socket.emit('syncStocks', stocks);
                 majInterface(); 
             } 
         }
@@ -1124,6 +1162,7 @@
                 stocks["Canon"] += de; 
                 actionFaite = true; 
                 log(`🔮 Perle obtenue.`); 
+                socket.emit('syncStocks', stocks);
                 majInterface(); 
             } 
         }
