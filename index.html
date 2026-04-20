@@ -262,6 +262,7 @@
         </div>
     </div>
 
+    <!-- MODAL (Menus) -->
     <div id="menu-modal">
         <div class="modal-contenu" id="contenu-dynamique"></div>
     </div>
@@ -556,17 +557,15 @@
                 let couleurJoueur = couleursPions[indexJoueur % couleursPions.length];
                 let opacite = cEstMoi ? "1" : "0.85"; 
                 
+                let filtreCSS = `filter: drop-shadow(1px 1px 0px white) drop-shadow(-1px -1px 0px white) drop-shadow(0px 0px 12px ${couleurJoueur}); opacity: ${opacite};`;
+                
                 bateau.innerHTML = `
                     <div class="flottant">
-                        <img src="bateau.png" class="img-bateau" style="filter: drop-shadow(1px 1px 0px white) drop-shadow(-1px -1px 0px white) drop-shadow(0px 0px 12px ${couleurJoueur}); opacity: ${opacite};">
+                        <img src="bateau.png" class="img-bateau" style="${filtreCSS}" onerror="this.style.display='none'; this.nextSibling.style.display='block';">
+                        <div style="font-size: 55px; display: none; ${filtreCSS}">🏴‍☠️</div>
                     </div>
                     <div class="pseudo-bateau" style="color:${couleurJoueur}">${joueurData.pseudo}</div>
                 `;
-                
-                let img = bateau.querySelector('img');
-                img.onerror = function() {
-                    this.outerHTML = `<div style="font-size: 55px; filter: drop-shadow(1px 1px 0px white) drop-shadow(-1px -1px 0px white) drop-shadow(0px 0px 12px ${couleurJoueur}); opacity: ${opacite};">🏴‍☠️</div>`;
-                };
                 
                 document.getElementById("grille-carte").appendChild(bateau);
                 
@@ -589,7 +588,7 @@
                 }
 
                 let r = Math.floor(joueurData.position / 5);
-                let c = joueurData.position % 5;
+                let c = Math.floor(joueurData.position % 5);
                 let offset = indexJoueur * 4; 
                 
                 bateau.style.top = (12 + r * 95 + offset) + "px"; 
@@ -608,16 +607,14 @@
             let bouc = document.createElement("div"); 
             bouc.id = "navire-boucanier";
             
+            let filtreCSS = `filter: sepia(0.5) hue-rotate(90deg) saturate(2) drop-shadow(0px 0px 15px #27ae60);`;
+            
             bouc.innerHTML = `
                 <div class="flottant">
-                    <img src="bateau.png" class="img-bateau" style="filter: sepia(0.5) hue-rotate(90deg) saturate(2) drop-shadow(0px 0px 15px #27ae60);">
+                    <img src="bateau.png" class="img-bateau" style="${filtreCSS}" onerror="this.style.display='none'; this.nextSibling.style.display='block';">
+                    <div style="font-size: 55px; display: none; ${filtreCSS}">☠️</div>
                 </div>
             `;
-            
-            let img = bouc.querySelector('img');
-            img.onerror = function() {
-                this.outerHTML = `<div style="font-size: 55px; filter: sepia(0.5) hue-rotate(90deg) saturate(2) drop-shadow(0px 0px 15px #27ae60);">☠️</div>`;
-            };
             
             document.getElementById("grille-carte").appendChild(bouc);
             
@@ -629,7 +626,7 @@
             };
             
             let rb = Math.floor(boucanier.position / 5);
-            let cb = boucanier.position % 5;
+            let cb = Math.floor(boucanier.position % 5);
             bouc.style.top = (12 + rb * 95 + 10) + "px"; 
             bouc.style.left = (12 + cb * 95 + 15) + "px";
             bouc.style.zIndex = 11;
@@ -654,6 +651,7 @@
 
         function activerTornade() {
             if (monInventaire["Tornade"] > 0 && !tourBoucanierActif) {
+                // ACTION GRATUITE
                 monInventaire["Tornade"]--;
                 socket.emit('syncStocks', stocks);
                 etatTornade = true;
