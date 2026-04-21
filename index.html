@@ -2,14 +2,16 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Kraken Fall Multi</title>
     <link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Nunito:wght@700&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { 
             --tile-size: 90px; 
+            --gap-size: 5px;
         }
-
+        
         body { 
             background-color: #dcb37b; 
             background-image: radial-gradient(circle, #e6c280 20%, #c49a52 80%); 
@@ -17,8 +19,9 @@
             display: flex; 
             flex-direction: column; 
             align-items: center; 
-            margin-top: 10px; 
-            overflow-y: scroll; 
+            margin: 0; 
+            padding: 10px;
+            min-height: 100vh;
             overflow-x: hidden; 
             color: #333; 
         }
@@ -29,42 +32,54 @@
             text-transform: uppercase; 
             letter-spacing: 2px; 
             text-shadow: 2px 2px 0px rgba(255,255,255,0.4); 
+            text-align: center;
         }
 
-        h1 { margin-bottom: 5px; font-size: 60px; }
+        h1 { margin-bottom: 5px; font-size: 50px; }
 
         #ecran-accueil, #ecran-lobby, .inventaire, .panneau-joueurs, .modal-contenu, #panneau-choix { 
             background: #fdf5e6; 
             border: 6px solid #4a2e15; 
             border-radius: 12px; 
             box-shadow: 0 10px 25px rgba(0,0,0,0.6); 
+            box-sizing: border-box;
         }
 
-        #ecran-accueil { padding: 40px; text-align: center; }
-        
-        #ecran-lobby { padding: 30px; text-align: center; display: none; width: 350px; }
+        #ecran-accueil { padding: 40px; text-align: center; width: 100%; max-width: 400px; }
+        #ecran-lobby { padding: 30px; text-align: center; display: none; width: 100%; max-width: 400px; }
         .titre-lobby { font-size: 40px; margin-top: 0; margin-bottom: 10px; border-bottom: 3px solid #4a2e15; }
         
         #liste-joueurs { list-style-type: none; padding: 0; font-size: 20px; font-weight: bold; color: #8b0000; text-align: left; }
         #liste-joueurs li { margin: 10px 0; padding: 5px; background: rgba(0,0,0,0.05); border-radius: 5px; border-left: 4px solid #4a2e15; display:flex; justify-content: space-between;}
 
-        #panneau-choix { display: none; padding: 20px; text-align: center; margin-bottom: 15px; width: 450px;}
+        #panneau-choix { display: none; padding: 20px; text-align: center; margin-bottom: 15px; width: 100%; max-width: 450px;}
 
-        #zone-jeu { display: none; opacity: 0; flex-direction: row; gap: 20px; align-items: flex-start; transition: opacity 0.6s ease; }
-        .zone-carte { display: flex; flex-direction: column; align-items: center; width: 490px; flex-shrink: 0; }
+        /* Conteneur principal qui s'adapte sur mobile */
+        #zone-jeu { 
+            display: none; 
+            opacity: 0; 
+            flex-direction: row; 
+            gap: 15px; 
+            align-items: flex-start; 
+            justify-content: center;
+            transition: opacity 0.6s ease; 
+            width: 100%;
+            max-width: 1100px;
+        }
+        
+        .zone-carte { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
 
         .map { 
             display: grid; 
             grid-template-columns: repeat(5, var(--tile-size)); 
-            gap: 5px; 
+            gap: var(--gap-size); 
             background-color: #2c1e16; 
-            padding: 12px; 
+            padding: 10px; 
             border: 8px solid #4a2e15; 
             border-radius: 10px; 
             width: max-content; 
             user-select: none; 
             box-shadow: inset 0 0 20px black, 0 15px 30px rgba(0,0,0,0.5); 
-            position: relative; 
         }
 
         .case { 
@@ -79,7 +94,8 @@
             position: relative; 
             box-shadow: 0 4px 0px rgba(0,0,0,0.4); 
             transition: transform 0.1s, box-shadow 0.1s; 
-            overflow: hidden; 
+            /* On enlève overflow:hidden pour permettre aux noms de dépasser */
+            overflow: visible; 
         }
 
         .case:hover { transform: translateY(-4px) scale(1.02); z-index: 5; box-shadow: 0 8px 10px rgba(0,0,0,0.5); }
@@ -89,45 +105,59 @@
         .ile { background: radial-gradient(circle, #2ecc71, #1e8449); border: 2px solid #145a32; }
         .volcan { background: radial-gradient(circle, #555, #222); border: 2px solid #c0392b; box-shadow: inset 0 0 20px #e74c3c; font-size: 40px; }
 
-        .icone-ile { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-        .icone-ile-texte { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); font-size: 45px; z-index: 1; filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.6)); }
-        .nom-ile { position: relative; z-index: 2; width: 100%; background: rgba(0, 0, 0, 0.6); font-size: 11px; font-weight: bold; color: white; text-align: center; line-height: 1.4; padding: 2px 0; letter-spacing: 0.5px; }
+        /* Les images des îles ont désormais le border-radius directement */
+        .icone-ile { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; border-radius: 6px; }
+        .icone-ile-texte { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); font-size: calc(var(--tile-size)*0.5); z-index: 1; filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.6)); }
+        .nom-ile { position: absolute; bottom: 0; left: 0; z-index: 2; width: 100%; background: rgba(0, 0, 0, 0.7); font-size: 11px; font-weight: bold; color: white; text-align: center; line-height: 1.2; padding: 2px 0; border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; }
 
-        @keyframes pulsePlacement { 0% { box-shadow: inset 0 0 10px #2ecc71, 0 0 10px #2ecc71; border: 2px solid #2ecc71; } 50% { box-shadow: inset 0 0 30px #2ecc71, 0 0 25px #2ecc71; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #2ecc71, 0 0 10px #2ecc71; border: 2px solid #2ecc71; } }
+        @keyframes pulsePlacement { 0% { box-shadow: inset 0 0 10px #2ecc71; border: 2px solid #2ecc71; } 50% { box-shadow: inset 0 0 30px #2ecc71; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #2ecc71; border: 2px solid #2ecc71; } }
         .case-placement { animation: pulsePlacement 1.5s infinite; z-index: 6; }
 
-        @keyframes pulseHighlight { 0% { box-shadow: inset 0 0 10px #f1c40f, 0 0 10px #f1c40f; border: 2px solid #f1c40f; } 50% { box-shadow: inset 0 0 30px #f1c40f, 0 0 25px #f1c40f; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #f1c40f, 0 0 10px #f1c40f; border: 2px solid #f1c40f; } }
+        @keyframes pulseHighlight { 0% { box-shadow: inset 0 0 10px #f1c40f; border: 2px solid #f1c40f; } 50% { box-shadow: inset 0 0 30px #f1c40f; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #f1c40f; border: 2px solid #f1c40f; } }
         .case-jouable { animation: pulseHighlight 1.5s infinite; z-index: 6; }
 
-        @keyframes pulseTornade { 0% { box-shadow: inset 0 0 10px #9b59b6, 0 0 10px #9b59b6; border: 2px solid #9b59b6; } 50% { box-shadow: inset 0 0 30px #9b59b6, 0 0 25px #9b59b6; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #9b59b6, 0 0 10px #9b59b6; border: 2px solid #9b59b6; } }
+        @keyframes pulseTornade { 0% { box-shadow: inset 0 0 10px #9b59b6; border: 2px solid #9b59b6; } 50% { box-shadow: inset 0 0 30px #9b59b6; border: 2px solid #fff; } 100% { box-shadow: inset 0 0 10px #9b59b6; border: 2px solid #9b59b6; } }
         .case-jouable-tornade { animation: pulseTornade 1.5s infinite; z-index: 6; }
 
-        @keyframes flotter { 0% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-5px) rotate(2deg); } 100% { transform: translateY(0px) rotate(0deg); } }
-        .flottant { animation: flotter 2.5s infinite ease-in-out; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; }
-
+        @keyframes flotter { 0%, 100% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-5px) rotate(3deg); } }
+        
+        /* Les bateaux sont maintenant DANS les cases ! Plus de bugs de positionnement */
         .bateau-joueur, #navire-boucanier { 
             position: absolute; 
-            width: var(--tile-size); 
-            height: var(--tile-size); 
-            cursor: pointer; 
-            transition: top 0.4s ease, left 0.4s ease; 
+            top: 0; left: 0;
+            width: 100%; height: 100%; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            pointer-events: none; /* Le clic traverse la div... */
+            z-index: 10;
         }
         
-        .img-bateau { width: 80%; height: 80%; object-fit: contain; }
+        .flottant { 
+            animation: flotter 2.5s infinite ease-in-out; 
+            display: flex; justify-content: center; align-items: center; 
+            width: 100%; height: 100%; 
+        }
+
+        .img-bateau { 
+            width: 85%; height: 85%; object-fit: contain; 
+            pointer-events: auto; /* ... mais s'arrête sur l'image du bateau pour pouvoir cliquer ! */
+            cursor: pointer;
+        }
         
         .pseudo-bateau { 
             position: absolute; 
-            bottom: -5px; 
-            width: 100%; 
+            bottom: -15px; 
+            width: max-content; 
             text-align: center; 
             font-weight: 900; 
             text-shadow: 1px 1px 2px black, 0 0 5px black; 
-            font-size: 16px; 
-            z-index: 15; 
+            font-size: 14px; 
             pointer-events: none;
+            background: rgba(0,0,0,0.4);
+            padding: 0 4px;
+            border-radius: 4px;
         }
 
-        .inventaire, .panneau-joueurs { padding: 15px; width: 280px; font-size: 15px; box-sizing: border-box; flex-shrink: 0; }
+        .inventaire, .panneau-joueurs { padding: 15px; width: 280px; font-size: 15px; box-sizing: border-box; }
         .joueur-carte { border: 2px dashed #cba876; padding: 8px; margin-bottom: 10px; border-radius: 6px; background: rgba(0,0,0,0.03); }
         .joueur-nom { font-weight: 900; font-size: 18px; margin-bottom: 5px; text-shadow: 1px 1px 1px rgba(0,0,0,0.2); }
 
@@ -136,18 +166,9 @@
 
         button { outline: none; -webkit-tap-highlight-color: transparent; font-family: 'Nunito', sans-serif; }
         .btn-action { 
-            background: linear-gradient(to bottom, #8b2500, #5c1800); 
-            color: white; 
-            border: 3px solid #3a0f00; 
-            padding: 10px 14px; 
-            cursor: pointer; 
-            border-radius: 8px; 
-            font-weight: 900; 
-            font-size: 14px; 
-            margin: 3px; 
-            box-shadow: inset 0 2px 2px rgba(255,255,255,0.2), 0 4px 0px #3a0f00; 
-            text-shadow: 1px 1px 2px black; 
-            transition: all 0.1s; 
+            background: linear-gradient(to bottom, #8b2500, #5c1800); color: white; border: 3px solid #3a0f00; padding: 10px 14px; 
+            cursor: pointer; border-radius: 8px; font-weight: 900; font-size: 14px; margin: 3px; 
+            box-shadow: inset 0 2px 2px rgba(255,255,255,0.2), 0 4px 0px #3a0f00; text-shadow: 1px 1px 2px black; transition: all 0.1s; 
         }
         .btn-action:hover:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 2px 2px rgba(255,255,255,0.2), 0 2px 0px #3a0f00; }
         .btn-action:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
@@ -156,40 +177,44 @@
         #actions-rapides { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; justify-content: center; }
         
         .log-messages { 
-            background-color: #e8d0a9; 
-            border: 5px solid #4a2e15; 
-            border-radius: 8px; 
-            height: 160px; 
-            width: 100%; 
-            overflow-y: auto; 
-            padding: 12px; 
-            font-size: 15px; 
-            margin-top: 15px; 
-            font-weight: bold; 
-            color: #3e2723; 
-            box-sizing: border-box; 
-            box-shadow: inset 0 0 20px rgba(139, 69, 19, 0.4), 0 6px 10px rgba(0,0,0,0.3); 
-            line-height: 1.5; 
+            background-color: #e8d0a9; border: 5px solid #4a2e15; border-radius: 8px; height: 160px; width: 100%; max-width: 490px;
+            overflow-y: auto; padding: 12px; font-size: 14px; margin-top: 15px; font-weight: bold; color: #3e2723; 
+            box-sizing: border-box; box-shadow: inset 0 0 20px rgba(139, 69, 19, 0.4), 0 6px 10px rgba(0,0,0,0.3); line-height: 1.4; 
         }
 
-        #menu-modal, #overlay-des { 
-            position: fixed; 
-            top: 0; left: 0; 
-            width: 100%; height: 100%; 
-            display: flex; justify-content: center; align-items: center; 
-            opacity: 0; pointer-events: none; transition: opacity 0.3s ease; 
-        }
-        #menu-modal { background-color: rgba(0, 0, 0, 0.85); z-index: 100; }
-        #overlay-des { background: radial-gradient(circle, rgba(0,0,0,0.8), rgba(0,0,0,0.95)); z-index: 200; flex-direction: column; color: white; font-size: 24px; text-align: center; }
+        #menu-modal, #overlay-des { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 1000; padding: 10px; box-sizing: border-box; }
+        #menu-modal { background-color: rgba(0, 0, 0, 0.85); }
+        #overlay-des { background: radial-gradient(circle, rgba(0,0,0,0.8), rgba(0,0,0,0.95)); flex-direction: column; color: white; font-size: 24px; text-align: center; }
         
         .actif { opacity: 1 !important; pointer-events: all !important; }
-        .modal-contenu { padding: 30px; text-align: center; min-width: 350px; transform: translateY(-30px); transition: transform 0.3s; }
+        .modal-contenu { padding: 30px; text-align: center; width: 100%; max-width: 350px; transform: translateY(-30px); transition: transform 0.3s; overflow-y: auto; max-height: 90vh; }
         .actif .modal-contenu { transform: translateY(0); }
         
         .input-pari { padding: 10px; font-size: 20px; width: 80px; text-align: center; border: 4px solid #4a2e15; border-radius: 8px; margin: 10px; background: #fffdf5; font-weight: bold; color: #8b0000; }
         
         #de-animation { font-size: 140px; margin-bottom: 20px; animation: secousse 0.3s infinite; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8)); }
-        @keyframes secousse { 0% { transform: rotate(-15deg) scale(1); } 50% { transform: rotate(15deg) scale(1.1); } 100% { transform: rotate(-15deg) scale(1); } }
+        @keyframes secousse { 0%, 100% { transform: rotate(-15deg); } 50% { transform: rotate(15deg) scale(1.1); } }
+
+        /* ========================================= */
+        /* ======== DESIGN MOBILE RESPONSIVE ======= */
+        /* ========================================= */
+        @media screen and (max-width: 800px) {
+            /* La carte prend toute la largeur de l'écran */
+            :root { 
+                --tile-size: calc((100vw - 40px) / 5); 
+                --gap-size: 3px;
+            }
+            
+            #zone-jeu { flex-direction: column; align-items: center; gap: 10px; }
+            .inventaire, .panneau-joueurs { width: 100%; max-width: 500px; order: 2; }
+            .zone-carte { width: 100%; order: 1; }
+            
+            h1 { font-size: 35px; }
+            .titre-lobby { font-size: 30px; }
+            .nom-ile { font-size: 9px; }
+            .pseudo-bateau { font-size: 11px; bottom: -12px; }
+            .btn-action { padding: 12px 18px; font-size: 15px; margin: 2px; }
+        }
     </style>
 </head>
 <body>
@@ -197,7 +222,7 @@
     <div id="ecran-accueil">
         <h1>Kraken Fall</h1>
         <p style="font-weight: bold; font-size: 20px; margin-bottom: 20px;">Entrez votre nom de capitaine :</p>
-        <input type="text" id="pseudo-input" class="input-pari" style="width: 250px;" placeholder="Ex: Barbe Noire">
+        <input type="text" id="pseudo-input" class="input-pari" style="width: 80%; max-width: 250px;" placeholder="Ex: Barbe Noire">
         <br>
         <button class="btn-action" style="font-size: 24px; padding: 15px 30px; margin-top: 10px;" onclick="rejoindreLobby()">Rejoindre l'équipage</button>
     </div>
@@ -211,18 +236,18 @@
 
     <div id="zone-jeu">
         <div class="zone-carte">
-            <h1 id="affichage-pseudo" style="text-align: center; font-size: 40px;">Capitaine</h1>
+            <h1 id="affichage-pseudo">Capitaine</h1>
             
             <div id="panneau-choix">
                 <h2 style="margin-top:0;">Quel est votre plan ?</h2>
-                <button class="btn-action" style="width:90%; font-size:18px; padding:12px; margin-bottom:10px;" onclick="choisirOrdre('CHOIX_A')">🥇 Placer en 1er (Mais Jouer en dernier)</button><br>
-                <button class="btn-action" style="width:90%; font-size:18px; padding:12px; background:linear-gradient(to bottom, #2980b9, #154360);" onclick="choisirOrdre('CHOIX_B')">🚀 Jouer en 1er (Mais Placer en dernier)</button>
+                <button class="btn-action" style="width:90%; font-size:18px; padding:12px; margin-bottom:10px;" onclick="choisirOrdre('CHOIX_A')">🥇 Placer en 1er (Jouer en dernier)</button><br>
+                <button class="btn-action" style="width:90%; font-size:18px; padding:12px; background:linear-gradient(to bottom, #2980b9, #154360);" onclick="choisirOrdre('CHOIX_B')">🚀 Jouer en 1er (Placer en dernier)</button>
             </div>
 
             <div class="map" id="grille-carte"></div>
             
             <div id="actions-rapides">
-                <button id="btn-interagir" class="btn-action" onclick="clicInteragirIle()" style="display:none; background: linear-gradient(to bottom, #d35400, #a04000); border-color: #5c1800; font-size: 15px;">🏝️ Visiter l'île</button>
+                <button id="btn-interagir" class="btn-action" onclick="clicInteragirIle()" style="display:none; background: linear-gradient(to bottom, #d35400, #a04000);">🏝️ Visiter l'île</button>
                 <button id="btn-tirer" class="btn-action" onclick="choisirCible('canon')" style="display:none; background: linear-gradient(to bottom, #444, #111);">💥 Canon</button>
                 <button id="btn-voile" class="btn-action" onclick="utiliserVoile()" style="display:none; background: linear-gradient(to bottom, #2980b9, #154360);">💨 Voile</button>
                 <button id="btn-repa" class="btn-action" onclick="utiliserReparation()" style="display:none; background: linear-gradient(to bottom, #27ae60, #145a32);">🛠️ Réparer</button>
@@ -231,8 +256,8 @@
                 <button id="btn-tirer-boucanier" class="btn-action" onclick="choisirCible('boucanier')" style="display:none; background: linear-gradient(to bottom, #666, #222); border-color: black;">👻 Tir Boucanier</button>
             </div>
             
-            <button id="btn-fin-tour" class="btn-action" style="width: 100%; padding: 15px; font-size: 24px; margin-top: 15px; font-family: 'Pirata One', cursive; display: none;" onclick="finirTour()">Finir mon tour</button>
-            <button id="btn-fin-tornade" class="btn-action" style="width: 100%; padding: 15px; font-size: 24px; margin-top: 15px; font-family: 'Pirata One', cursive; display: none; background: linear-gradient(to bottom, #8e44ad, #4a235a);" onclick="terminerTornade()">Dissiper la Tornade</button>
+            <button id="btn-fin-tour" class="btn-action" style="width: 100%; max-width: 490px; padding: 15px; font-size: 24px; margin-top: 15px; font-family: 'Pirata One', cursive; display: none;" onclick="finirTour()">Finir mon tour</button>
+            <button id="btn-fin-tornade" class="btn-action" style="width: 100%; max-width: 490px; padding: 15px; font-size: 24px; margin-top: 15px; font-family: 'Pirata One', cursive; display: none; background: linear-gradient(to bottom, #8e44ad, #4a235a);" onclick="terminerTornade()">Dissiper la Tornade</button>
             
             <div class="log-messages" id="journal">📜 <b>Journal de bord:</b><br></div>
         </div>
@@ -244,25 +269,24 @@
 
         <div class="inventaire">
             <div class="titre-inv">Mon Navire</div>
-            <div class="stat-ligne"><span>❤️ Points de Vie</span> <span id="valeur-vie" style="color: #c0392b; font-size: 18px;">5</span></div>
-            <div class="stat-ligne"><span>🪙 Pièces d'Or</span> <span id="valeur-pieces" style="color: #d35400; font-size: 18px;">5</span></div>
+            <div class="stat-ligne"><span>❤️ Points de Vie</span> <span id="valeur-vie" style="color: #c0392b; font-weight:bold; font-size: 18px;">5</span></div>
+            <div class="stat-ligne"><span>🪙 Pièces d'Or</span> <span id="valeur-pieces" style="color: #d35400; font-weight:bold; font-size: 18px;">5</span></div>
             
             <div class="titre-inv">Cargaison</div>
-            <div id="ma-cargaison" style="font-weight: 900; color: #5c1800; text-align: center; line-height: 1.6; font-size: 16px;">Cales vides...</div>
+            <div id="ma-cargaison" style="font-weight: 900; color: #5c1800; text-align: center; line-height: 1.6; font-size: 14px;">Cales vides...</div>
             
-            <div class="titre-inv">Stock Mondial</div>
+            <div class="titre-inv">Marché Mondial</div>
             <div class="stat-ligne"><span>🧵 Tissu</span> <span id="stock-Tissu">5</span></div>
             <div class="stat-ligne"><span>🍫 Cacao</span> <span id="stock-Cacao">5</span></div>
             <div class="stat-ligne"><span>🍾 Rhum</span> <span id="stock-Rhum">5</span></div>
             <div class="stat-ligne"><span>💣 Canons</span> <span id="stock-Canon">10</span></div>
             <div class="stat-ligne"><span>💨 Gr. Voiles</span> <span id="stock-Voile">10</span></div>
             <div class="stat-ligne"><span>🛠️ Réparations</span> <span id="stock-Repa">10</span></div>
-            <div class="stat-ligne"><span>🌪️ Tornades</span> <span id="stock-Tornade">5</span></div>
-            <div class="stat-ligne"><span>🌋 Éruptions</span> <span id="stock-Eruption">5</span></div>
+            <div class="stat-ligne"><span>🌪️ Tornades</span> <span id="stock-Tornade">2</span></div>
+            <div class="stat-ligne"><span>🌋 Éruptions</span> <span id="stock-Eruption">2</span></div>
         </div>
     </div>
 
-    <!-- MODAL (Menus) -->
     <div id="menu-modal">
         <div class="modal-contenu" id="contenu-dynamique"></div>
     </div>
@@ -283,19 +307,22 @@
 
         let layoutCarte = [];
         let typesIles = {};
-        let positionVolcan = -1;
+        let positionKrakenFall = -1;
         let boucanier = { position: -1, possesseur: null, prix: 0 };
         
+        // CORRESPONDANCE DES FICHIERS LOCAUX
         const iconesIles = { 
             "Tissu": "tissu.png", "Cacao": "cacao.png", "Rhum": "rhum.png", 
             "Vente": "vente.png", "Bateau": "ile_bateau.png", "Magie": "magie.png", 
-            "Boucanier": "ile_boucanier.png", "Pirate": "pirate.png", "Kraken": "kraken.png", 
-            "Kraken Fall": "kraken_fall.png", "Vie": "vie.png" 
+            "Boucanier": "ile_boucanier.png", "Pirate": "pirate.png", "Le Fort": "fort.png", 
+            "Volcan": "volcan.png", "Vie": "vie.png", "Kraken Fall": "kraken_fall.png" 
         };
+        
+        // EMOJIS DE SECOURS (Si l'image ne charge pas)
         const emojisSecours = { 
             "Tissu": "🧵", "Cacao": "🍫", "Rhum": "🍾", "Vente": "💰", "Bateau": "⛵", 
-            "Magie": "🔮", "Boucanier": "🪝", "Pirate": "⚔️", "Kraken": "🦑", 
-            "Kraken Fall": "⚓", "Vie": "🏥" 
+            "Magie": "🔮", "Boucanier": "🪝", "Pirate": "⚔️", "Le Fort": "🏰", 
+            "Volcan": "🌋", "Vie": "🏥", "Kraken Fall": "⚓" 
         };
         const couleursPions = ["#e74c3c", "#3498db", "#2ecc71", "#9b59b6", "#f1c40f"]; 
 
@@ -304,22 +331,20 @@
         let pv = 5; 
         let actionFaite = false; 
         let modeDeplacement = false; 
-        let deplacementGratuit = false;
-        
+        let mouvementGratuit = false; 
         let tourBoucanierActif = false; 
         let modeDeplacementBoucanier = false;
+        let tourNotifie = false;
 
         let etatTornade = false;
         let tornadeCibleId = null;
         let tornadeJoueursDeplaces = [];
         
-        let stocks = { "Tissu": 5, "Cacao": 5, "Rhum": 5, "Canon": 10, "Voile": 10, "Repa": 10, "Tornade": 5, "Eruption": 5 };
+        let stocks = { "Tissu": 5, "Cacao": 5, "Rhum": 5, "Canon": 10, "Voile": 10, "Repa": 10, "Tornade": 2, "Eruption": 2 };
         let monInventaire = { "Tissu": 0, "Cacao": 0, "Rhum": 0, "Canon": 0, "Voile": 0, "Repa": 0, "Tornade": 0, "Eruption": 0, "Perle": 0 };
         let achatsBateauEnCours = 0;
 
-        socket.on('connect', () => { 
-            monIdJoueur = socket.id; 
-        });
+        socket.on('connect', () => { monIdJoueur = socket.id; });
 
         socket.on('erreur', (msg) => { 
             alert(msg); 
@@ -330,15 +355,8 @@
         socket.on('initCarte', (data) => { 
             layoutCarte = data.layout; 
             typesIles = data.typesIles; 
-            positionVolcan = data.positionVolcan; 
-            stocks = data.stocks; 
+            positionKrakenFall = data.positionKrakenFall; 
             genererCarte(); 
-            majInterface();
-        });
-
-        socket.on('majStocks', (nouveauxStocks) => {
-            stocks = nouveauxStocks;
-            majInterface();
         });
 
         socket.on('majLobby', (data) => {
@@ -368,38 +386,42 @@
 
         socket.on('logGlobal', (msg) => log(msg));
         
-        socket.on('subirDegats', (d) => { 
-            pv -= d; 
-            log(`💥 VOUS AVEZ ÉTÉ TOUCHÉ ! -${d} PV`); 
+        socket.on('subirDegats', (degats) => { 
+            pv -= degats; 
+            log(`💥 VOUS AVEZ ÉTÉ TOUCHÉ ! -${degats} PV`); 
             if(pv <= 0) { 
-                alert("VOTRE NAVIRE A COULÉ !"); 
+                alert("VOTRE NAVIRE A COULÉ ! Vous avez été pillé !"); 
                 location.reload(); 
             } 
             majInterface(); 
         });
 
-        socket.on('mort', () => { 
-            alert("VOTRE NAVIRE A COULÉ SOUS LES TIRS ENNEMIS !"); 
-            location.reload(); 
-        });
-
-        socket.on('recoitLoot', (loot) => {
+        socket.on('recolterLoot', (loot) => {
             or += loot.or;
-            if(loot.inventaire) {
-                for(let key in loot.inventaire) {
-                    monInventaire[key] += loot.inventaire[key];
+            for (let item in loot.inventaire) {
+                if (monInventaire[item] !== undefined) {
+                    monInventaire[item] += loot.inventaire[item];
                 }
             }
-            log("🏴‍☠️ Abordage réussi ! Vous avez pillé les restes du navire !");
+            log(`🏴‍☠️ VOUS AVEZ PILLÉ LE NAVIRE ! (+${loot.or} Or et ressources)`);
             majInterface();
         });
 
         socket.on('majJeu', (data) => {
+            let precedentTour = cEstMonTour;
+            
             tousLesJoueurs = data.joueurs;
             etatDuJeu = data.etatJeu;
             joueurActuelID = data.joueurActuel;
             boucanier = data.boucanier;
+            
+            if (data.stocksMondial) {
+                stocks = data.stocksMondial;
+            }
+
             cEstMonTour = (monIdJoueur === joueurActuelID);
+
+            if (cEstMonTour && !precedentTour) tourNotifie = false;
 
             if(tousLesJoueurs[monIdJoueur]) {
                 positionJoueur = tousLesJoueurs[monIdJoueur].position;
@@ -410,12 +432,11 @@
                 if(cEstMonTour) {
                     document.getElementById("affichage-pseudo").innerText = "Faites votre choix !";
                     document.getElementById("panneau-choix").style.display = "block";
-                    log("👑 Vous avez eu le plus haut score ! Choisissez votre stratégie.");
+                    if(!tourNotifie) { log("👑 Vous avez eu le plus haut score ! Choisissez votre stratégie."); tourNotifie = true; }
                 } else {
                     document.getElementById("panneau-choix").style.display = "none";
                     let nomGagnant = tousLesJoueurs[joueurActuelID] ? tousLesJoueurs[joueurActuelID].pseudo : "un joueur";
                     document.getElementById("affichage-pseudo").innerText = "Attente de " + nomGagnant;
-                    log(`⏳ En attente que ${nomGagnant} choisisse sa stratégie...`);
                 }
             }
             else if (etatDuJeu === 'PLACEMENT') {
@@ -424,11 +445,10 @@
                 
                 if (cEstMonTour) {
                     document.getElementById("affichage-pseudo").innerText = "À vous de vous placer !";
-                    log("🗺️ CLIQUEZ SUR UNE CASE D'EAU VERTE SUR LA BORDURE DE LA CARTE !");
+                    if(!tourNotifie) { log("🗺️ CLIQUEZ SUR UNE CASE D'EAU VERTE SUR LA BORDURE DE LA CARTE !"); tourNotifie = true; }
                 } else {
                     let nomActuel = tousLesJoueurs[joueurActuelID] ? tousLesJoueurs[joueurActuelID].pseudo : "un joueur";
                     document.getElementById("affichage-pseudo").innerText = "Placement de " + nomActuel;
-                    log(`⏳ ${nomActuel} est en train de s'ancrer...`);
                 }
                 majInterface();
                 afficherBateau();
@@ -441,8 +461,9 @@
 
                 if (cEstMonTour && !etatTornade) {
                     document.getElementById("affichage-pseudo").innerText = "À VOTRE TOUR !";
-                    if(!actionFaite && !tourBoucanierActif) {
+                    if(!actionFaite && !tourBoucanierActif && !tourNotifie) {
                         log("⚔️ C'est à vous de jouer !");
+                        tourNotifie = true;
                     }
                 } else if (!etatTornade) {
                     let nomActuel = tousLesJoueurs[joueurActuelID] ? tousLesJoueurs[joueurActuelID].pseudo : "un joueur";
@@ -460,17 +481,9 @@
             socket.emit('nouveauJoueur', pseudo);
         }
 
-        function lancerPartie() { 
-            socket.emit('demarrerPartie'); 
-        }
-        
-        function choisirOrdre(choix) { 
-            socket.emit('choixOrdre', choix); 
-        }
-
-        function estSurBordure(index) { 
-            return index < 5 || index > 19 || index % 5 === 0 || index % 5 === 4; 
-        }
+        function lancerPartie() { socket.emit('demarrerPartie'); }
+        function choisirOrdre(choix) { socket.emit('choixOrdre', choix); }
+        function estSurBordure(index) { return index < 5 || index > 19 || index % 5 === 0 || index % 5 === 4; }
 
         function genererCarte() {
             const grille = document.getElementById("grille-carte"); 
@@ -478,6 +491,7 @@
             layoutCarte.forEach((type, i) => {
                 let div = document.createElement("div"); 
                 div.className = "case " + (type === 1 ? "ile" : "eau");
+                div.id = "case-" + i; // ID IMPORTANT POUR PLACER LES BATEAUX DEDANS
                 
                 if(type === 1) { 
                     let nom = typesIles[i]; 
@@ -485,17 +499,18 @@
                     let secour = emojisSecours[nom];
                     
                     div.innerHTML = `
-                        <img src="${imgSrc}" class="icone-ile">
+                        <img src="${imgSrc}" class="icone-ile" onerror="this.outerHTML='<div class=\\'icone-ile-texte\\'>${secour}</div>'">
                         <div class="nom-ile">${nom}</div>
                     `; 
-                    
-                    let img = div.querySelector('img');
-                    img.onerror = function() {
-                        this.outerHTML = `<div class="icone-ile-texte">${secour}</div>`;
-                    };
                 } 
-                else if (i === positionVolcan) { 
-                    div.innerHTML = `<div class="volcan" style="z-index:2; filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.6));">🌋</div>`; 
+                else if (i === positionKrakenFall) { 
+                    // Kraken Fall est généré sur l'eau
+                    let imgSrc = iconesIles["Kraken Fall"];
+                    let secour = emojisSecours["Kraken Fall"];
+                    div.innerHTML = `
+                        <img src="${imgSrc}" class="icone-ile" onerror="this.outerHTML='<div class=\\'icone-ile-texte\\'>${secour}</div>'">
+                        <div class="nom-ile">Kraken Fall</div>
+                    `; 
                 } 
                 div.onclick = () => verifierClic(i); 
                 grille.appendChild(div);
@@ -510,7 +525,7 @@
             
             if (etatDuJeu === 'PLACEMENT' && cEstMonTour) {
                 cases.forEach((c, i) => {
-                    if (layoutCarte[i] === 0 && i !== positionVolcan && estSurBordure(i)) {
+                    if (layoutCarte[i] === 0 && i !== positionKrakenFall && estSurBordure(i)) {
                         c.classList.add("case-placement");
                     }
                 });
@@ -524,18 +539,12 @@
                 }
                 else if(modeDeplacement && !tourBoucanierActif && !etatTornade) { 
                     cases.forEach((c, i) => { 
-                        // JOUEURS : PLUS DE COLLISION 
-                        if(calculerDistance(positionJoueur, i) === 1) {
-                            c.classList.add("case-jouable"); 
-                        }
+                        if(calculerDistance(positionJoueur, i) === 1) c.classList.add("case-jouable"); 
                     }); 
                 } 
                 else if (tourBoucanierActif && modeDeplacementBoucanier) { 
                     cases.forEach((c, i) => { 
-                        // BOUCANIER : PLUS DE COLLISION NON PLUS
-                        if(calculerDistance(boucanier.position, i) === 1) {
-                            c.classList.add("case-jouable"); 
-                        }
+                        if(calculerDistance(boucanier.position, i) === 1) c.classList.add("case-jouable"); 
                     }); 
                 }
             }
@@ -557,43 +566,46 @@
                 let couleurJoueur = couleursPions[indexJoueur % couleursPions.length];
                 let opacite = cEstMoi ? "1" : "0.85"; 
                 
-                let filtreCSS = `filter: drop-shadow(1px 1px 0px white) drop-shadow(-1px -1px 0px white) drop-shadow(0px 0px 12px ${couleurJoueur}); opacity: ${opacite};`;
-                
                 bateau.innerHTML = `
                     <div class="flottant">
-                        <img src="bateau.png" class="img-bateau" style="${filtreCSS}" onerror="this.style.display='none'; this.nextSibling.style.display='block';">
-                        <div style="font-size: 55px; display: none; ${filtreCSS}">🏴‍☠️</div>
+                        <img src="bateau.png" class="img-bateau" style="filter: drop-shadow(1px 1px 0px white) drop-shadow(-1px -1px 0px white) drop-shadow(0px 0px 12px ${couleurJoueur}); opacity: ${opacite};" onerror="this.outerHTML='<div style=\\'font-size: 55px; opacity: ${opacite};\\'>🏴‍☠️</div>'">
                     </div>
                     <div class="pseudo-bateau" style="color:${couleurJoueur}">${joueurData.pseudo}</div>
                 `;
                 
-                document.getElementById("grille-carte").appendChild(bateau);
+                // Rendre l'image cliquable (puisque le conteneur a pointer-events: none)
+                let clickTarget = bateau.querySelector('.img-bateau') || bateau.querySelector('.flottant div');
                 
                 if(cEstMoi || etatTornade) {
-                    bateau.onclick = function(e) { 
-                        e.stopPropagation(); 
-                        if (etatTornade && cEstMonTour) {
-                            if (!tornadeJoueursDeplaces.includes(id)) {
-                                tornadeCibleId = id;
-                                log(`🌪️ Sélectionnez une case pour déplacer ${joueurData.pseudo}.`);
-                                mettreAJourSurbrillance();
-                            } else {
-                                log(`⚠️ Vous avez déjà déplacé ce navire avec la tornade.`);
+                    if (clickTarget) {
+                        clickTarget.style.pointerEvents = "auto";
+                        clickTarget.onclick = function(e) { 
+                            e.stopPropagation(); 
+                            if (etatTornade && cEstMonTour) {
+                                if (!tornadeJoueursDeplaces.includes(id)) {
+                                    tornadeCibleId = id;
+                                    log(`🌪️ Sélectionnez une case vide pour déplacer ${joueurData.pseudo}.`);
+                                    mettreAJourSurbrillance();
+                                } else {
+                                    log(`⚠️ Vous avez déjà déplacé ce navire avec la tornade.`);
+                                }
                             }
-                        }
-                        else if(cEstMoi && etatDuJeu === 'JEU' && cEstMonTour && !tourBoucanierActif && !etatTornade) {
-                            basculerModeDeplacement(); 
-                        }
-                    };
+                            else if(cEstMoi && etatDuJeu === 'JEU' && cEstMonTour && !tourBoucanierActif && !etatTornade) {
+                                basculerModeDeplacement(); 
+                            }
+                        };
+                    }
                 }
 
-                let r = Math.floor(joueurData.position / 5);
-                let c = Math.floor(joueurData.position % 5);
-                let offset = indexJoueur * 4; 
-                
-                bateau.style.top = (12 + r * 95 + offset) + "px"; 
-                bateau.style.left = (12 + c * 95 + offset) + "px"; 
-                bateau.style.zIndex = cEstMoi ? 10 : 9;
+                // MAGIE RESPONSIVE : On ajoute le bateau DIRECTEMENT dans la div de la case !
+                let caseCible = document.getElementById("case-" + joueurData.position);
+                if (caseCible) {
+                    // On décale légèrement les bateaux pour qu'ils ne soient pas parfaitement superposés
+                    let decallage = indexJoueur * 4;
+                    bateau.style.transform = `translate(${decallage}px, -${decallage}px)`;
+                    bateau.style.zIndex = cEstMoi ? 10 : 9;
+                    caseCible.appendChild(bateau);
+                }
             }
             mettreAJourSurbrillance();
         }
@@ -607,38 +619,36 @@
             let bouc = document.createElement("div"); 
             bouc.id = "navire-boucanier";
             
-            let filtreCSS = `filter: sepia(0.5) hue-rotate(90deg) saturate(2) drop-shadow(0px 0px 15px #27ae60);`;
-            
             bouc.innerHTML = `
                 <div class="flottant">
-                    <img src="bateau.png" class="img-bateau" style="${filtreCSS}" onerror="this.style.display='none'; this.nextSibling.style.display='block';">
-                    <div style="font-size: 55px; display: none; ${filtreCSS}">☠️</div>
+                    <img src="bateau.png" class="img-bateau" style="filter: sepia(0.5) hue-rotate(90deg) saturate(2) drop-shadow(0px 0px 15px #27ae60);" onerror="this.outerHTML='<div style=\\'font-size: 55px;\\'>☠️</div>'">
                 </div>
             `;
             
-            document.getElementById("grille-carte").appendChild(bouc);
+            let clickTarget = bouc.querySelector('.img-bateau') || bouc.querySelector('.flottant div');
+            if (clickTarget) {
+                clickTarget.style.pointerEvents = "auto";
+                clickTarget.onclick = function(e) { 
+                    e.stopPropagation(); 
+                    if(tourBoucanierActif && cEstMonTour && boucanier.possesseur === monIdJoueur) {
+                        basculerModeDeplacementBoucanier(); 
+                    }
+                };
+            }
             
-            bouc.onclick = function(e) { 
-                e.stopPropagation(); 
-                if(tourBoucanierActif && cEstMonTour && boucanier.possesseur === monIdJoueur) {
-                    basculerModeDeplacementBoucanier(); 
-                }
-            };
-            
-            let rb = Math.floor(boucanier.position / 5);
-            let cb = Math.floor(boucanier.position % 5);
-            bouc.style.top = (12 + rb * 95 + 10) + "px"; 
-            bouc.style.left = (12 + cb * 95 + 15) + "px";
-            bouc.style.zIndex = 11;
+            let caseCible = document.getElementById("case-" + boucanier.position);
+            if (caseCible) {
+                bouc.style.zIndex = 11;
+                caseCible.appendChild(bouc);
+            }
             
             mettreAJourSurbrillance();
         }
 
         function basculerModeDeplacement() { 
             if(!cEstMonTour) return; 
-            if(actionFaite && !deplacementGratuit) return log("❌ Vous avez déjà fait une action."); 
+            if(actionFaite && !mouvementGratuit) return log("❌ Vous avez déjà fait une action."); 
             modeDeplacement = !modeDeplacement; 
-            if(!modeDeplacement) deplacementGratuit = false; 
             if(modeDeplacement) log("🗺️ Mode Navigation activé."); 
             mettreAJourSurbrillance(); 
         }
@@ -651,9 +661,10 @@
 
         function activerTornade() {
             if (monInventaire["Tornade"] > 0 && !tourBoucanierActif) {
-                // ACTION GRATUITE
                 monInventaire["Tornade"]--;
-                socket.emit('syncStocks', stocks);
+                stocks["Tornade"]++; 
+                emettreStockServeur();
+                
                 etatTornade = true;
                 tornadeJoueursDeplaces = [];
                 tornadeCibleId = null;
@@ -682,7 +693,7 @@
             if (!cEstMonTour) return;
             
             if (etatDuJeu === 'PLACEMENT') {
-                if (layoutCarte[index] !== 0 || index === positionVolcan) {
+                if (layoutCarte[index] !== 0 || index === positionKrakenFall) {
                     return log("❌ Choisissez une case d'EAU libre (verte).");
                 }
                 if (!estSurBordure(index)) {
@@ -695,7 +706,6 @@
             
             if (etatDuJeu !== 'JEU') return;
             
-            // --- PENDANT LA TORNADE ---
             if (etatTornade) {
                 if (tornadeCibleId !== null) {
                     let posCible = tousLesJoueurs[tornadeCibleId].position;
@@ -720,11 +730,9 @@
                 return; 
             }
 
-            // --- DEPLACEMENT BOUCANIER ---
             if(tourBoucanierActif) {
                 if(modeDeplacementBoucanier) {
                     let distB = calculerDistance(boucanier.position, index);
-                    
                     if(distB === 1) { 
                         socket.emit('deplacementBoucanier', index);
                         modeDeplacementBoucanier = false; 
@@ -739,20 +747,18 @@
                 return;
             }
 
-            // --- ACTION NORMALE DU JOUEUR ---
             let distP = calculerDistance(positionJoueur, index);
             
-            if(modeDeplacement) {
+            if(modeDeplacement && (!actionFaite || mouvementGratuit)) {
                 if(distP === 1) { 
-                    socket.emit('deplacement', index); 
+                    socket.emit('deplacement', index);
                     
-                    if(deplacementGratuit) {
-                        deplacementGratuit = false;
-                    } else {
+                    if (!mouvementGratuit) {
                         actionFaite = true; 
                     }
-                    
+                    mouvementGratuit = false; 
                     modeDeplacement = false; 
+                    
                     log("⛵ Navigation effectuée."); 
                     majInterface(); 
                 } 
@@ -762,7 +768,7 @@
                     log("❌ Trop loin !");
                 }
             } else if (!actionFaite) {
-                if(distP <= 1 && layoutCarte[index] === 1) {
+                if(distP <= 1 && (layoutCarte[index] === 1 || index === positionKrakenFall)) {
                     ouvrirMenuIle(index);
                 } else if(layoutCarte[index] === 0) {
                     log("🌊 C'est de l'eau.");
@@ -773,7 +779,7 @@
         function clicInteragirIle() {
             let iles = [];
             for(let i=0; i<25; i++) {
-                if(layoutCarte[i] === 1 && calculerDistance(positionJoueur, i) <= 1) {
+                if((layoutCarte[i] === 1 || i === positionKrakenFall) && calculerDistance(positionJoueur, i) <= 1) {
                     iles.push(i);
                 }
             }
@@ -783,7 +789,8 @@
             } else if(iles.length > 1) {
                 let html = `<h2>Quelle île visiter ?</h2>`;
                 iles.forEach(i => {
-                    html += `<button class="btn-action" style="width:80%; font-size:18px; margin-bottom: 8px;" onclick="ouvrirMenuIle(${i})">🏝️ ${typesIles[i]}</button><br>`;
+                    let nomIle = (i === positionKrakenFall) ? "Kraken Fall" : typesIles[i];
+                    html += `<button class="btn-action" style="width:80%; font-size:18px; margin-bottom: 8px;" onclick="ouvrirMenuIle(${i})">🏝️ ${nomIle}</button><br>`;
                 });
                 html += `<br><button class="btn-action" style="background:#4a2e15;" onclick="fermerMenu()">Annuler</button>`;
                 
@@ -822,6 +829,8 @@
             if(type === 'canon') {
                 socket.emit('attaque', { cible: cibleId, type: 'canon', degats: 2 });
                 monInventaire["Canon"]--;
+                stocks["Canon"]++;
+                emettreStockServeur();
                 actionFaite = true;
             } else if (type === 'boucanier') {
                 socket.emit('attaque', { cible: cibleId, type: 'boucanier', degats: 1 });
@@ -835,7 +844,9 @@
         function utiliserVoile() {
             if (monInventaire["Voile"] > 0 && !tourBoucanierActif) {
                 monInventaire["Voile"]--;
-                deplacementGratuit = true;
+                stocks["Voile"]++;
+                emettreStockServeur();
+                mouvementGratuit = true; 
                 modeDeplacement = true;
                 log("💨 Voile activée : Mouvement gratuit !");
                 majInterface();
@@ -846,6 +857,8 @@
         function utiliserReparation() {
             if (monInventaire["Repa"] > 0 && !tourBoucanierActif) {
                 monInventaire["Repa"]--;
+                stocks["Repa"]++;
+                emettreStockServeur();
                 pv++;
                 actionFaite = true;
                 log("🛠️ Réparation : +1 PV");
@@ -856,6 +869,8 @@
         function utiliserEruption() {
             if (monInventaire["Eruption"] > 0 && !tourBoucanierActif) {
                 monInventaire["Eruption"]--;
+                stocks["Eruption"]++;
+                emettreStockServeur();
                 pv -= 2;
                 actionFaite = true;
                 log("🌋 ÉRUPTION ! -2 PV."); 
@@ -866,7 +881,7 @@
 
         function ouvrirMenuIle(index) {
             achatsBateauEnCours = 0; 
-            let type = typesIles[index]; 
+            let type = (index === positionKrakenFall) ? "Kraken Fall" : typesIles[index]; 
             let contenu = document.getElementById("contenu-dynamique");
             
             let html = `
@@ -874,7 +889,7 @@
                     <span style="font-size: 50px;">
                         <img src="${iconesIles[type]}" style="width:50px; height:50px; object-fit:contain;">
                     </span> 
-                    Île : ${type}
+                    <br>Île : ${type}
                 </h2>
             `;
             
@@ -912,16 +927,16 @@
             else if(type === "Bateau") { 
                 html += `
                     <p style="font-size:18px;">Améliorez navire (2 Or / objet).<br>Achats restants : <b id="compteur-achats-bateau">2</b></p>
-                    <button class="btn-action" onclick="executerAchatObjet('Canon', 'Bateau')">💣 Canon</button><br>
-                    <button class="btn-action" onclick="executerAchatObjet('Voile', 'Bateau')">💨 Gr. Voile</button><br>
-                    <button class="btn-action" onclick="executerAchatObjet('Repa', 'Bateau')">🛠️ Réparation</button>
+                    <button class="btn-action" style="font-size: 18px;" onclick="executerAchatObjet('Canon', 'Bateau')">💣 Canon</button><br>
+                    <button class="btn-action" style="font-size: 18px;" onclick="executerAchatObjet('Voile', 'Bateau')">💨 Gr. Voile</button><br>
+                    <button class="btn-action" style="font-size: 18px;" onclick="executerAchatObjet('Repa', 'Bateau')">🛠️ Réparation</button>
                 `;
             } 
             else if(type === "Magie") { 
                 html += `
                     <p style="font-size:18px;">Magie noire (Coût: 1 PV / objet).<br>Achats restants : <b id="compteur-achats-magie">2</b></p>
-                    <button class="btn-action" style="width:80%; margin-bottom:5px;" onclick="executerAchatObjet('Tornade', 'Magie')">🌪️ Tornade</button><br>
-                    <button class="btn-action" style="width:80%;" onclick="executerAchatObjet('Eruption', 'Magie')">🌋 Éruption</button>
+                    <button class="btn-action" style="width:80%; font-size: 18px; margin-bottom:5px;" onclick="executerAchatObjet('Tornade', 'Magie')">🌪️ Tornade</button><br>
+                    <button class="btn-action" style="width:80%; font-size: 18px;" onclick="executerAchatObjet('Eruption', 'Magie')">🌋 Éruption</button>
                 `;
             } 
             else if(type === "Vie") { 
@@ -934,7 +949,7 @@
                     html += `
                         <p style="font-size:16px;">Prix : <b>Mise + ancien prix (${boucanier.prix})</b>.</p>
                         Mise : <input type="number" id="mise-bouc" class="input-pari" min="1" value="1"><br>
-                        <button class="btn-action" onclick="capturerBoucanier()">Payer & Capturer</button>
+                        <button class="btn-action" style="font-size: 18px;" onclick="capturerBoucanier()">Payer & Capturer</button>
                     `; 
                 }
             } 
@@ -942,17 +957,17 @@
                 html += `
                     <p style="font-size:18px;"><b>Pari (20 Pièces)</b><br>Dé 4 >= pari : Mort.</p>
                     <input type="number" id="pari-canons" class="input-pari" min="1" max="${monInventaire['Canon']}" value="1"> Canons<br>
-                    <button class="btn-action" onclick="lancerDeJeu('Pirate', 4, 'pari-canons')">🎲 Lancer Dé 4</button>
+                    <button class="btn-action" style="font-size: 18px;" onclick="lancerDeJeu('Pirate', 4, 'pari-canons')">🎲 Lancer Dé 4</button>
                 `;
             } 
-            else if(type === "Kraken") { 
+            else if(type === "Le Fort") { 
                 if(monInventaire["Perle"] > 0) {
                     html += `<p style="font-size:20px; font-weight:bold; color:#8e44ad;">Vous possédez la Perle.</p>`; 
                 } else {
                     html += `
-                        <p style="font-size:18px;"><b>Perle Kraken</b><br>Dé 6 >= pari : Mort.</p>
+                        <p style="font-size:18px;"><b>Perle du Kraken</b><br>Dé 6 >= pari : Mort.</p>
                         <input type="number" id="pari-kraken" class="input-pari" min="1" max="${monInventaire['Canon']}" value="1"> Canons<br>
-                        <button class="btn-action" onclick="lancerDeJeu('Kraken', 6, 'pari-kraken')">🎲 Lancer Dé 6</button>
+                        <button class="btn-action" style="font-size: 18px;" onclick="lancerDeJeu('Le Fort', 6, 'pari-kraken')">🎲 Lancer Dé 6</button>
                     `;
                 }
             } 
@@ -963,6 +978,9 @@
                     html += `<p style="color: #c0392b; font-weight: 900; font-size: 20px;">Il vous faut la Perle.</p>`; 
                 }
             }
+            else if(type === "Volcan") {
+                html += `<p style="color:#c0392b; font-size:18px;"><b>Le Volcan gronde !</b><br>La chaleur est trop forte pour y accoster.</p>`;
+            }
             
             html += `<br><br><button class="btn-action" style="background: #34495e; border-color:#2c3e50; font-size:16px; padding:10px 20px;" onclick="annulerMenu()">Fermer</button>`;
             
@@ -971,7 +989,7 @@
             let img = contenu.querySelector('img');
             if (img) {
                 img.onerror = function() {
-                    this.outerHTML = `<span>${emojisSecours[type]}</span>`;
+                    this.outerHTML = `<span style="font-size: 50px;">${emojisSecours[type]}</span>`;
                 };
             }
 
@@ -1006,18 +1024,23 @@
             }
         }
 
+        function emettreStockServeur() {
+            socket.emit('majStocksMondial', stocks);
+            lastStocksStr = JSON.stringify(stocks);
+        }
+
         function executerAchat(n, q, p) { 
             if(or >= p && stocks[n] >= q) { 
                 or -= p; 
                 stocks[n] -= q; 
                 monInventaire[n] += q; 
                 actionFaite = true; 
+                emettreStockServeur();
                 log(`🛒 Achat ${q} ${n}.`); 
-                socket.emit('syncStocks', stocks);
                 fermerMenu(); 
                 majInterface(); 
             } else {
-                alert("Impossible (Or manquant ou stock vide)");
+                alert("Impossible (Or manquant ou stock mondial vide)");
             }
         }
         
@@ -1032,8 +1055,8 @@
                 monInventaire[n] += 1; 
                 achatsBateauEnCours++; 
                 
+                emettreStockServeur();
                 log(`🛒 ${n} acheté !`); 
-                socket.emit('syncStocks', stocks);
                 majInterface(); 
                 
                 if(achatsBateauEnCours >= 2) { 
@@ -1045,7 +1068,7 @@
                     if(comp) comp.innerText = 2 - achatsBateauEnCours; 
                 } 
             } else {
-                alert("Ressources insuffisantes (Or ou Vie) ou stock vide !"); 
+                alert("Ressources insuffisantes (Or ou Vie) ou stock mondial vide !"); 
             }
         }
 
@@ -1056,8 +1079,8 @@
                 monInventaire[n] -= q; 
                 stocks[n] += q; 
                 actionFaite = true; 
+                emettreStockServeur();
                 log(`💰 Vente : +${g} or.`); 
-                socket.emit('syncStocks', stocks);
                 fermerMenu(); 
                 majInterface(); 
             } else {
@@ -1124,8 +1147,8 @@
                     overlay.classList.remove("actif"); 
                     if(typeIle === "Pirate") {
                         resoudrePirate(resultat, pari); 
-                    } else if(typeIle === "Kraken") {
-                        resoudreKraken(resultat, pari); 
+                    } else if(typeIle === "Le Fort" || typeIle === "Kraken") {
+                        resoudreFort(resultat, pari); 
                     }
                 }; 
             }, 1500); 
@@ -1141,32 +1164,32 @@
                 or += 20; 
                 monInventaire["Canon"] -= de; 
                 stocks["Canon"] += de; 
+                emettreStockServeur();
                 actionFaite = true; 
                 log(`💰 +20 Pièces d'or.`); 
-                socket.emit('syncStocks', stocks);
                 majInterface(); 
             } 
         }
 
-        function resoudreKraken(de, pari) { 
+        function resoudreFort(de, pari) { 
             if(de >= pari) { 
                 pv = 0; 
                 majInterface(); 
-                alert(`☠️ Vous avez été mangé par le Kraken !`); 
+                alert(`☠️ Vous avez été détruit par les gardes du Fort !`); 
                 location.reload(); 
             } else { 
                 monInventaire["Perle"] += 1; 
                 monInventaire["Canon"] -= de; 
-                stocks["Canon"] += de; 
+                stocks["Canon"] += de;
+                emettreStockServeur(); 
                 actionFaite = true; 
                 log(`🔮 Perle obtenue.`); 
-                socket.emit('syncStocks', stocks);
                 majInterface(); 
             } 
         }
 
         function gagnerJeu() { 
-            alert("👑 VICTOIRE ! Vous avez gagné la partie !"); 
+            alert("👑 VICTOIRE ! Vous avez rapporté la Perle et gagné la partie !"); 
             location.reload(); 
         }
 
@@ -1178,6 +1201,7 @@
                 tourBoucanierActif = true; 
                 actionFaite = true; 
                 modeDeplacement = false; 
+                mouvementGratuit = false;
                 log("⚓ Phase du Boucanier ! Cliquez sur lui pour le déplacer, ou sur 'Tir Boucanier'."); 
                 majInterface(); 
             } else { 
@@ -1186,8 +1210,12 @@
                 tourBoucanierActif = false; 
                 modeDeplacementBoucanier = false; 
                 etatTornade = false;
+                mouvementGratuit = false;
                 log("--- Fin de votre tour. ---"); 
+                
                 socket.emit('finDeTour'); 
+                
+                cEstMonTour = false;
                 majInterface(); 
             }
         }
@@ -1244,7 +1272,7 @@
             
             let ilesProches = false;
             for(let i=0; i<25; i++) {
-                if(layoutCarte[i] === 1 && calculerDistance(positionJoueur, i) <= 1) {
+                if((layoutCarte[i] === 1 || i === positionKrakenFall) && calculerDistance(positionJoueur, i) <= 1) {
                     ilesProches = true; break;
                 }
             }
@@ -1268,7 +1296,7 @@
             if (tousLesJoueurs[monIdJoueur]) {
                 let me = tousLesJoueurs[monIdJoueur];
                 if (me.pv !== pv || me.or !== or || me.cargaison !== totalCargaison) {
-                    socket.emit('majStats', { pv: pv, or: or, cargaison: totalCargaison });
+                    socket.emit('majStats', { pv: pv, or: or, cargaison: totalCargaison, inventaire: monInventaire });
                 }
             }
 
